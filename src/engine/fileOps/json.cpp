@@ -41,6 +41,7 @@ SafeWriter* DivEngine::saveJSON(DivJSONExportOptions* options) {
     json["songInfo"]["album"]=song.category;
     json["songInfo"]["system"]={song.autoSystem,song.systemName};
     json["songInfo"]["tuning"]=song.tuning;
+    json["songInfo"]["masterVolume"]=song.masterVol;
     json["songInfo"]["instrumentCount"]=song.insLen;
     json["songInfo"]["wavetableCount"]=song.waveLen;
     json["songInfo"]["sampleCount"]=song.sampleLen;
@@ -74,6 +75,7 @@ SafeWriter* DivEngine::saveJSON(DivJSONExportOptions* options) {
       chip["volume"]=song.systemVol[i];
       chip["panning"]=song.systemPan[i];
       chip["frontRear"]=song.systemPanFR[i];
+      chip["channels"]=song.systemChans[i];
       JSON chipFlags;
       for (auto flag:song.systemFlags[i].configMap()) {
         chipFlags[flag.first]=flag.second;
@@ -116,6 +118,8 @@ SafeWriter* DivEngine::saveJSON(DivJSONExportOptions* options) {
     subsong["patternLength"]=s->patLen;
     subsong["orderLength"]=s->ordersLen;
     subsong["highlights"]={s->hilightA,s->hilightB};
+    subsong["effectDivider"]=s->effectDivider;
+    subsong["arpSpeed"]=s->arpLen;
 
     if (options->exportOrders) subsong["orders"]={};
     if (options->exportPatterns) subsong["patterns"]={};
@@ -543,6 +547,7 @@ JSON serializeInstrument(DivInstrument* ins) {
     SET_VALUE(fm,ams);
     SET_VALUE(fm,fmsLFO);
     SET_VALUE(fm,amsLFO);
+    SET_VALUE(fm,tremLFO);
     SET_VALUE(fm,ops);
     SET_VALUE(fm,opllPreset);
     SET_VALUE(fm,block);
@@ -1136,7 +1141,7 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
     if (j.contains("fm")) {
       const JSON& jv=j["fm"];
       GET_VALUE(fm,alg); GET_VALUE(fm,fb); GET_VALUE(fm,fms); GET_VALUE(fm,ams);
-      GET_VALUE(fm,fmsLFO); GET_VALUE(fm,amsLFO); GET_VALUE(fm,ops); GET_VALUE(fm,opllPreset);
+      GET_VALUE(fm,fmsLFO); GET_VALUE(fm,amsLFO); GET_VALUE(fm,tremLFO); GET_VALUE(fm,ops); GET_VALUE(fm,opllPreset);
       GET_VALUE(fm,block); GET_VALUE(fm,fixedDrums); GET_VALUE(fm,kickFreq);
       GET_VALUE(fm,snareHatFreq); GET_VALUE(fm,tomTopFreq);
       const JSON& ops=jv.at("operators");
@@ -1186,7 +1191,7 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
       GET_VALUE(amiga,useWave); GET_VALUE(amiga,waveLen);
       if (jv.contains("sampleMap")) {
         const JSON& map=jv["sampleMap"];
-        for (size_t i=0; i<map.size() && i<180; i++) {
+        for (size_t i=0; i<map.size() && i<sizeof(ins->amiga.noteMap)/sizeof(ins->amiga.noteMap[0]); i++) {
           jget(map[i],"freq",ins->amiga.noteMap[i].freq);
           jget(map[i],"map",ins->amiga.noteMap[i].map);
         }
@@ -1197,7 +1202,7 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
       jget(jv,"useNoteMap",ins->amiga.useNoteMap);
       if (jv.contains("sampleMap")) {
         const JSON& map=jv["sampleMap"];
-        for (size_t i=0; i<map.size() && i<180; i++) {
+        for (size_t i=0; i<map.size() && i<sizeof(ins->amiga.noteMap)/sizeof(ins->amiga.noteMap[0]); i++) {
           jget(map[i],"dpcmFreq",ins->amiga.noteMap[i].dpcmFreq);
           jget(map[i],"dpcmDelta",ins->amiga.noteMap[i].dpcmDelta);
         }
@@ -1442,6 +1447,7 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       jget(si,"author",ds.author);
       jget(si,"album",ds.category);
       jget(si,"tuning",ds.tuning);
+      jget(si,"masterVolume",ds.masterVol);
       jget(si,"comments",ds.notes);
       if (si.contains("system") && si["system"].is_array() && si["system"].size()==2) {
         ds.autoSystem=si["system"][0].get<bool>();
@@ -1480,6 +1486,18 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       }
     }
     ds.initDefaultSystemChans();
+    for (int i=0; i<ds.systemLen; i++) {
+      if (chips[i].contains("channels")) {
+        int ch=chips[i]["channels"].get<int>();
+        if (ch<1 || ch>DIV_MAX_CHANS) throw std::out_of_range(fmt::sprintf("chip %d: channel count out of range",i));
+        ds.systemChans[i]=ch;
+      }
+    }
+    {
+      int totalChans=0;
+      for (int i=0; i<ds.systemLen; i++) totalChans+=ds.systemChans[i];
+      if (totalChans>DIV_MAX_CHANS) throw std::out_of_range("too many channels");
+    }
     ds.recalcChans();
 
     // assets
@@ -1523,6 +1541,9 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
         s->hilightA=sj["highlights"].at(0).get<int>();
         s->hilightB=sj["highlights"].at(1).get<int>();
       }
+      jget(sj,"effectDivider",s->effectDivider);
+      jget(sj,"arpSpeed",s->arpLen);
+      if (s->arpLen<1) s->arpLen=1;
       s->patLen=sj.at("patternLength").get<int>();
       if (s->patLen<1 || s->patLen>DIV_MAX_ROWS) throw std::out_of_range("pattern length out of range");
       s->ordersLen=sj.at("orderLength").get<int>();

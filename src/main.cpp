@@ -91,6 +91,9 @@ String vgmOutName;
 String cmdOutName;
 String romOutName;
 String txtOutName;
+String furOutName;
+String s98OutName;
+String jsonOutName;
 int benchMode=0;
 int subsong=-1;
 DivCSOptions csExportOptions;
@@ -109,6 +112,13 @@ bool consoleNoControls=false;
 bool displayEngineFailError=false;
 bool displayLocaleFailError=false;
 bool vgmOutDirect=false;
+bool vgmLoop=true;
+bool vgmHints=false;
+int vgmVersion=0x171;
+
+#ifdef WITH_JSON
+DivJSONExportOptions jsonExportOptions;
+#endif
 
 bool safeMode=false;
 bool safeModeWithAudio=false;
@@ -621,6 +631,61 @@ TAParamResult pTxtOut(String val) {
   return TA_PARAM_SUCCESS;
 }
 
+TAParamResult pFurOut(String val) {
+  furOutName=val;
+  e.setAudio(DIV_AUDIO_DUMMY);
+  return TA_PARAM_SUCCESS;
+}
+
+TAParamResult pS98Out(String val) {
+  s98OutName=val;
+  e.setAudio(DIV_AUDIO_DUMMY);
+  return TA_PARAM_SUCCESS;
+}
+
+#ifdef WITH_JSON
+TAParamResult pJSONOut(String val) {
+  jsonOutName=val;
+  e.setAudio(DIV_AUDIO_DUMMY);
+  return TA_PARAM_SUCCESS;
+}
+
+TAParamResult pJSONPretty(String val) {
+  jsonExportOptions.jsonPretty=true;
+  return TA_PARAM_SUCCESS;
+}
+#endif
+
+TAParamResult pVGMVersion(String val) {
+  // same list as vgmVersions in gui/guiConst.cpp
+  const int validVersions[]={0x150, 0x151, 0x160, 0x161, 0x170, 0x171, 0x172};
+  int ver=0;
+  try {
+    ver=std::stoi(val,NULL,16);
+  } catch (std::exception& e) {
+    logE("VGM version shall be a hexadecimal number (e.g. 171).");
+    return TA_PARAM_ERROR;
+  }
+  for (int i: validVersions) {
+    if (ver==i) {
+      vgmVersion=ver;
+      return TA_PARAM_SUCCESS;
+    }
+  }
+  logE("invalid VGM version! valid values are: 150, 151, 160, 161, 170, 171, 172.");
+  return TA_PARAM_ERROR;
+}
+
+TAParamResult pNoLoop(String val) {
+  vgmLoop=false;
+  return TA_PARAM_SUCCESS;
+}
+
+TAParamResult pVGMHints(String val) {
+  vgmHints=true;
+  return TA_PARAM_SUCCESS;
+}
+
 bool needsValue(String param) {
   for (size_t i=0; i<params.size(); i++) {
     if (params[i].name==param) {
@@ -647,7 +712,16 @@ void initParams() {
   params.push_back(TAParam("r","romout",true,pROMOut,"<filename|path>","export ROM file, or path for multi-file export"));
   params.push_back(TAParam("R","romconf",true,pROMConf,"<key>=<value>","set configuration parameter for ROM export"));
   params.push_back(TAParam("t","txtout",true,pTxtOut,"<filename>","export as text file"));
-  params.push_back(TAParam("L","loglevel",true,pLogLevel,"debug|info|warning|error","set the log level (info by default)"));
+  params.push_back(TAParam("","furout",true,pFurOut,"<filename>","save as .fur (uncompressed); use to convert imported modules"));
+  params.push_back(TAParam("","s98out",true,pS98Out,"<filename>","output .s98 data"));
+#ifdef WITH_JSON
+  params.push_back(TAParam("","jsonout",true,pJSONOut,"<filename>","export song data as JSON"));
+  params.push_back(TAParam("","jsonpretty",false,pJSONPretty,"","indent JSON output"));
+#endif
+  params.push_back(TAParam("","vgmver",true,pVGMVersion,"150|151|160|161|170|171|172","set VGM version (171 by default)"));
+  params.push_back(TAParam("","noloop",false,pNoLoop,"","do not loop VGM/S98 output"));
+  params.push_back(TAParam("","vgmhints",false,pVGMHints,"","add pattern hints to VGM output"));
+  params.push_back(TAParam("L","loglevel",true,pLogLevel,"trace|debug|info|warning|error","set the log level (trace by default)"));
   params.push_back(TAParam("v","view",true,pView,"pattern|commands|nothing","set visualization (nothing by default)"));
   params.push_back(TAParam("i","info",false,pInfo,"","get info about a song"));
   params.push_back(TAParam("c","console",false,pConsole,"","enable console mode"));
@@ -657,7 +731,7 @@ void initParams() {
 
   params.push_back(TAParam("l","loops",true,pLoops,"<count>","set number of loops"));
   params.push_back(TAParam("s","subsong",true,pSubSong,"<number>","set sub-song"));
-  params.push_back(TAParam("o","outmode",true,pOutMode,"one|persys|perchan","set file output mode"));
+  params.push_back(TAParam("","outmode",true,pOutMode,"one|persys|perchan","set file output mode"));
   params.push_back(TAParam("S","safemode",false,pSafeMode,"","enable safe mode (software rendering and no audio)"));
   params.push_back(TAParam("A","safeaudio",false,pSafeModeAudio,"","enable safe mode (with audio"));
 
@@ -691,6 +765,23 @@ void reportError(String what) {
   }
 }
 #endif
+
+// writes and frees the result of a save function. reports failMsg if w is NULL.
+void writeOutputFile(SafeWriter* w, const String& path, const String& failMsg) {
+  if (w==NULL) {
+    reportError(failMsg);
+    return;
+  }
+  FILE* f=ps_fopen(path.c_str(),"wb");
+  if (f!=NULL) {
+    fwrite(w->getFinalBuf(),1,w->size(),f);
+    fclose(f);
+  } else {
+    reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
+  }
+  w->finish();
+  delete w;
+}
 
 #ifndef _WIN32
 #ifdef HAVE_GUI
@@ -746,6 +837,13 @@ int main(int argc, char** argv) {
   cmdOutName="";
   romOutName="";
   txtOutName="";
+  furOutName="";
+  s98OutName="";
+  jsonOutName="";
+#ifdef WITH_JSON
+  // compat flags are needed to reproduce playback
+  jsonExportOptions.exportCompatFlags=true;
+#endif
 
   // load config for locale
   e.prePreInit();
@@ -913,7 +1011,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  const bool outputMode = outName!="" || vgmOutName!="" || cmdOutName!="" || romOutName!="" || txtOutName!="";
+  const bool outputMode = outName!="" || vgmOutName!="" || cmdOutName!="" || romOutName!="" || txtOutName!="" || furOutName!="" || s98OutName!="" || jsonOutName!="";
 
   if (fileName.empty() && (benchMode || infoMode || outputMode)) {
     logE("provide a file!");
@@ -1068,7 +1166,7 @@ int main(int argc, char** argv) {
       }
     }
     if (vgmOutName!="") {
-      SafeWriter* w=e.saveVGM(NULL,true,0x171,false,vgmOutDirect);
+      SafeWriter* w=e.saveVGM(NULL,vgmLoop,vgmVersion,vgmHints,vgmOutDirect);
       if (w!=NULL) {
         FILE* f=ps_fopen(vgmOutName.c_str(),"wb");
         if (f!=NULL) {
@@ -1162,6 +1260,17 @@ int main(int argc, char** argv) {
         reportError(_("could not write text!"));
       }
     }
+    if (furOutName!="") {
+      writeOutputFile(e.saveFur(false),furOutName,_("could not write .fur!"));
+    }
+    if (s98OutName!="") {
+      writeOutputFile(e.saveS98(0.0f,NULL,vgmLoop,-1),s98OutName,_("could not write S98!"));
+    }
+#ifdef WITH_JSON
+    if (jsonOutName!="") {
+      writeOutputFile(e.saveJSON(&jsonExportOptions),jsonOutName,_("could not write JSON!"));
+    }
+#endif
     finishLogFile();
     return 0;
   }

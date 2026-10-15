@@ -2685,6 +2685,32 @@ void DivEngine::dumpSongInfo() {
     song.notes.c_str()
   );
 
+  calcSongTimestamps();
+  if (curSubSong!=NULL) {
+    DivSongTimestamps& ts=curSubSong->ts;
+    printf(
+      "TIMING\n"
+      "- duration: %d.%06ds\n"
+      "- ticks: %llu\n"
+      "- rows: %d\n",
+      ts.totalTime.seconds,
+      ts.totalTime.micros,
+      (unsigned long long)ts.totalTicks,
+      ts.totalRows
+    );
+    if (ts.isLoopable) {
+      printf(
+        "- loop: order %d row %d to order %d row %d\n\n",
+        ts.loopStart.order,
+        ts.loopStart.row,
+        ts.loopEnd.order,
+        ts.loopEnd.row
+      );
+    } else {
+      printf("- loop: none\n\n");
+    }
+  }
+
   printf("SUB-SONGS\n");
   int index=0;
   for (DivSubSong* i: song.subsong) {

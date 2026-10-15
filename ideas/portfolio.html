@@ -1,0 +1,229 @@
+<title>Furnace Fork Portfolio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: single reading column; tracker-style monospace row labels mark data, prose stays in the humanist face. */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2130; --muted:#5b6476; --line:#d9dde5;
+  --accent:#8f4c05; --accent-soft:#fbeedc;
+  --adv:#17633e; --adv-soft:#e3f3ea; --val:#244f96; --val-soft:#e5edfa; --park:#5e5010; --park-soft:#f4efd9; --kill:#9a3434; --kill-soft:#f6e3e3;
+  --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12151c; --surface:#1a1f29; --fg:#e4e7ee; --muted:#9aa3b5; --line:#2c3341;
+  --accent:#f0a24a; --accent-soft:#2e2414;
+  --adv:#5cc98f; --adv-soft:#16291f; --val:#7fa8f0; --val-soft:#18233a; --park:#d6c26a; --park-soft:#29261a; --kill:#ec8b8b; --kill-soft:#2e1a1a;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12151c; --surface:#1a1f29; --fg:#e4e7ee; --muted:#9aa3b5; --line:#2c3341;
+  --accent:#f0a24a; --accent-soft:#2e2414;
+  --adv:#5cc98f; --adv-soft:#16291f; --val:#7fa8f0; --val-soft:#18233a; --park:#d6c26a; --park-soft:#29261a; --kill:#ec8b8b; --kill-soft:#2e1a1a;
+  color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font-body);font-size:16px;line-height:1.55}
+.wrap{max-width:960px;margin:0 auto;padding-block:32px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:36px}
+h1,h2,h3{text-wrap:balance;line-height:1.2;margin:0}
+h1{font-size:2rem}
+h2{font-size:1.3rem;display:flex;align-items:baseline;gap:10px}
+h2 .tag{font-family:var(--font-mono);font-size:.75rem;color:var(--accent);letter-spacing:.06em}
+h3{font-size:1.05rem}
+p{margin:0;max-width:68ch}
+section{display:flex;flex-direction:column;gap:14px}
+.mono,code{font-family:var(--font-mono);font-size:.85em}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;color:var(--muted);font-family:var(--font-mono);font-size:.8rem}
+.meta b{color:var(--fg);font-weight:600}
+.funnel{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-family:var(--font-mono);font-size:.9rem}
+.funnel span{background:var(--surface);border:1px solid var(--line);padding:4px 10px;border-radius:4px;font-variant-numeric:tabular-nums}
+.funnel i{color:var(--muted);font-style:normal}
+.strip{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--accent);padding:16px;display:flex;flex-direction:column;gap:10px}
+.strip ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;max-width:72ch}
+.src{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.src div{font-size:.9rem}
+.src .st{font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.scroll{overflow-x:auto;border:1px solid var(--line);background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.9rem}
+th,td{text-align:left;vertical-align:top;padding:9px 10px;border-bottom:1px solid var(--line)}
+th{font-family:var(--font-mono);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+td.n{font-family:var(--font-mono);color:var(--accent);font-variant-numeric:tabular-nums}
+tr:last-child td{border-bottom:0}
+.pill{display:inline-block;font-family:var(--font-mono);font-size:.72rem;padding:2px 7px;border-radius:3px;white-space:nowrap}
+.adv{background:var(--adv-soft);color:var(--adv)} .val{background:var(--val-soft);color:var(--val)}
+.park{background:var(--park-soft);color:var(--park)} .kill{background:var(--kill-soft);color:var(--kill)}
+.state{background:var(--accent-soft);color:var(--accent)}
+.chain{font-family:var(--font-mono);font-size:.85rem;background:var(--surface);border:1px dashed var(--line);padding:12px 14px;overflow-x:auto;white-space:pre;line-height:1.6}
+details{background:var(--surface);border:1px solid var(--line)}
+details>summary{cursor:pointer;padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px;align-items:center;list-style:none}
+details>summary::-webkit-details-marker{display:none}
+details>summary::before{content:"▸";color:var(--accent);font-family:var(--font-mono)}
+details[open]>summary::before{content:"▾"}
+details>summary:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.card-body{padding:0 14px 14px 32px;display:flex;flex-direction:column;gap:8px;font-size:.95rem}
+.card-body dl{margin:0;display:grid;grid-template-columns:max-content 1fr;gap:4px 14px}
+.card-body dt{font-family:var(--font-mono);font-size:.75rem;color:var(--muted);padding-top:3px}
+.card-body dd{margin:0;min-width:0}
+.cards{display:flex;flex-direction:column;gap:8px}
+.ledger td:first-child{font-weight:700}
+.deliv{display:flex;flex-direction:column;gap:14px}
+.d{background:var(--surface);border:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.d .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+pre.kick{margin:0;font-family:var(--font-mono);font-size:.8rem;background:var(--bg);border:1px solid var(--line);padding:10px 12px;overflow-x:auto;white-space:pre-wrap;word-break:break-word}
+button.copy{font-family:var(--font-mono);font-size:.75rem;background:transparent;color:var(--accent);border:1px solid var(--accent);padding:3px 9px;border-radius:3px;cursor:pointer;margin-left:auto}
+.placeholder{color:var(--muted);font-style:italic}
+footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padding-top:14px}
+@media (max-width:520px){.card-body{padding-left:14px}.card-body dl{grid-template-columns:1fr}h1{font-size:1.6rem}}
+</style>
+
+<div class="wrap">
+<header style="display:flex;flex-direction:column;gap:10px">
+  <h1>Furnace fork: feature portfolio</h1>
+  <p>Ideas for the personal fork of the Furnace chiptune tracker, grounded in its code, upstream user requests, and the maintainer's own goal of composing and tuning instruments through Claude.</p>
+  <div class="meta"><span>run <b>2026-10-15</b></span><span>mode <b>quick</b></span><span>sha <b>5b9c00314</b></span><span>output <b>ideas/</b></span></div>
+  <div class="funnel"><span>23 candidates</span><i>→</i><span>6 survivors</span><i>→</i><span>6 selected</span><i>·</i><span>9 parked</span><span>8 killed</span></div>
+</header>
+
+<section>
+  <h2><span class="tag">SRC</span>Evidence and disclosures</h2>
+  <div class="strip">
+    <div class="src">
+      <div><div class="st">delivered</div>Code signal mining: 15 findings, key citations re-checked by hand</div>
+      <div><div class="st">delivered</div>Upstream GitHub: 344 Suggestions discussions plus Issues</div>
+      <div><div class="st">delivered · zero</div>Session history: no earlier sessions exist for this repo</div>
+      <div><div class="st">partial</div>Maintainer interview: 1 of 3 questions answered</div>
+    </div>
+    <ul>
+      <li>The "composing through Claude" persona rests on one interview sentence and is low confidence. "Chip creation/tuning" was read as instrument/patch design and sample tuning, not new chip emulators.</li>
+      <li>Upstream demand is shallow: the top suggestion has 13 upvotes. No web search was run (quick mode).</li>
+      <li>Every change in a personal fork adds merge work on upstream sync. New CLI flags and new files cost less than edits to busy GUI files.</li>
+      <li>Git submodules are not checked out locally; building the fork needs <code>git submodule update --init</code> first.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <h2><span class="tag">PAT</span>Portfolio</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>#</th><th>Idea</th><th>Verdict</th><th>Score</th><th>Lenses</th><th>Persona</th><th>Evidence</th><th>Effort</th><th>Build</th><th>State</th></tr></thead>
+    <tbody>
+      <tr><td class="n">01</td><td>Load songs from JSON</td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Josh, Exporter</td><td><code>json.cpp:32</code> saveJSON exists, no loader</td><td>M</td><td>natural-fit</td><td><span class="pill state" data-state="1">Brief written</span></td></tr>
+      <tr><td class="n">02</td><td>CLI parity with GUI export, richer <code>-info</code></td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Exporter, Josh</td><td><code>main.cpp:1071</code> hard-coded VGM options</td><td>M</td><td>natural-fit</td><td><span class="pill adv" data-state="2">Done</span></td></tr>
+      <tr><td class="n">03</td><td>Compose and tune with Claude via an MCP server</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh</td><td>Interview answer; CLI renders audio</td><td>M after 01+02</td><td>new-ground</td><td><span class="pill state" data-state="3">Brief written</span></td></tr>
+      <tr><td class="n">04</td><td>Headless "listen" report for rendered audio</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh</td><td><code>tuner.cpp:37-59</code> FFT on live output only</td><td>M</td><td>natural-fit</td><td><span class="pill state" data-state="4">Brief written</span></td></tr>
+      <tr><td class="n">05</td><td>Detect sample pitch automatically</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>inside-out</td><td>Josh?, Importer</td><td><code>tuning-samples.md:10-12</code> manual math</td><td>S–M</td><td>natural-fit</td><td><span class="pill state" data-state="5">Brief written</span></td></tr>
+      <tr><td class="n">06</td><td>Write new chip emulators with Claude (repeatable recipe + one pilot chip)</td><td><span class="pill val">Validate</span></td><td class="mono">8/10</td><td>both</td><td>Josh</td><td>A basic chip add is 16 files / 916 lines; Dummy System template</td><td>M–L</td><td>natural-fit</td><td><span class="pill state" data-state="6">Brief written</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="chain">01 JSON import ─┐
+02 CLI parity ──┼──▶ 03 MCP server ◀── 04 listen report (feedback loop)
+               │
+05 pitch detect (independent; also a tool 03 could call)
+06 chip emulators (independent; new chips become new material for 03)</div>
+</section>
+
+<section>
+  <h2><span class="tag">INS</span>Idea details</h2>
+  <div class="cards">
+    <details><summary><b>01 · Load songs from JSON</b><span class="pill adv">Advance</span><span class="mono">8/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Josh in every Claude editing session; batch exporters who generate songs from scripts.</dd>
+      <dt>evidence</dt><dd>JSON export landed July–Aug 2026 (<code>src/engine/fileOps/json.cpp:32</code>, serializers at <code>:24-29</code>). No <code>loadJSON</code> exists and the loader dispatch never checks for JSON.</dd>
+      <dt>why it won</dt><dd>It's the cheapest way for an outside tool to write a song. The alternative, writing binary .fur directly, is complex and compatibility-sensitive.</dd>
+      <dt>scope note</dt><dd>Unknown whether the export is complete enough to rebuild a song (systems, compat flags, sample data). That's the first thing to check.</dd>
+    </dl></div></details>
+    <details><summary><b>02 · CLI parity with GUI export</b><span class="pill adv">Advance</span><span class="mono">8/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Batch exporters on every render; Claude on every render or inspect call.</dd>
+      <dt>evidence</dt><dd>CLI flags at <code>src/main.cpp:634-667</code> have no JSON, .fur, S98 or DMF output. VGM export is hard-coded at <code>:1071</code>. <code>-o</code> is claimed twice (<code>:637</code>, <code>:660</code>). <code>-info</code> skips duration and loop data the engine already computes. Upstream #540 asks for better CLI error feedback.</dd>
+      <dt>why it won</dt><dd>Additive flags with little merge cost, wiring engine calls that already exist.</dd>
+    </dl></div></details>
+    <details><summary><b>03 · Compose and tune with Claude via MCP</b><span class="pill val">Validate</span><span class="mono">7/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Josh: "drive music creation and chip creation/tuning through Claude with API/MCP".</dd>
+      <dt>evidence</dt><dd>The CLI already renders audio, VGM and ROM output. With 01 and 02, an external MCP process could read, write, render and export songs.</dd>
+      <dt>open gap</dt><dd>No recurring use is evidenced yet, and it's unclear whether Claude can make good patches without hearing them. Hence Validate, with a spike first.</dd>
+      <dt>sibling</dt><dd>An in-process live server inside the running app (parked: needs a new networking library).</dd>
+    </dl></div></details>
+    <details><summary><b>04 · Headless listen report</b><span class="pill val">Validate</span><span class="mono">7/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>The FFT pitch detector in <code>src/gui/tuner.cpp:37-59</code> only runs on live output. FFTW is bundled.</dd>
+      <dt>why</dt><dd>Lets Claude check pitch, brightness and envelope of what it made. Its value depends on 03.</dd>
+    </dl></div></details>
+    <details><summary><b>05 · Detect sample pitch automatically</b><span class="pill val">Validate</span><span class="mono">6/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd><code>doc/9-guides/tuning-samples.md:10-12</code> tells users to compute semitone offsets by hand or use a web calculator.</dd>
+      <dt>open gap</dt><dd>Unknown whether Josh works with recorded samples.</dd>
+    </dl></div></details>
+    <details><summary><b>06 · Write new chip emulators with Claude</b><span class="pill val">Validate</span><span class="mono">8/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Josh, added mid-run: "I'd also like to be able to write new chip emulators using Claude".</dd>
+      <dt>evidence</dt><dd>Adding Watara Supervision touched 16 files (commit <code>9d279cead</code>): a sound core, a driver, and about ten small registrations. A Dummy System template exists (<code>src/engine/platform/dummy.cpp</code>, <code>sysDef.cpp:2824</code>). Klattsch (<code>390137b35</code>) shows Furnace accepts invented chips. New chips are upstream's largest request theme (#873).</dd>
+      <dt>why Claude fits</dt><dd>The work follows a fixed pattern, and most Furnace chips are ports of existing open-source cores. A written recipe plus a sound-comparison test makes it repeatable.</dd>
+      <dt>open gap</dt><dd>Which pilot chip; how to check accuracy without real hardware; and chip IDs. Each chip's one-byte ID is saved in .fur files. Upstream uses <code>0x80</code>–<code>0xe7</code> plus <code>0xf0</code>, <code>0xf1</code>, <code>0xf5</code>, <code>0xfc</code> and <code>0xfd</code>, so fork chips need a reserved range (maybe <code>0xf6</code>–<code>0xfb</code>), and their songs won't open in upstream Furnace.</dd>
+    </dl></div></details>
+  </div>
+</section>
+
+<section>
+  <h2><span class="tag">LOG</span>Parked and killed</h2>
+  <details><summary><b>Parked</b><span class="pill park">9</span></summary><div class="card-body" style="padding-left:14px"><div class="scroll"><table class="ledger">
+    <thead><tr><th>Idea</th><th>Reason</th><th>Closest</th></tr></thead><tbody>
+    <tr><td>In-process live MCP server</td><td>Needs a new networking library; the 03 spike decides if live control is needed</td><td>03</td></tr>
+    <tr><td>Load .fti / .bti instruments</td><td>Real gap (<code>fileOpsIns.cpp:2066</code>, #859) but no evidence Josh composes for NES/OPNA</td><td>01</td></tr>
+    <tr><td>Per-file import warnings</td><td>Real gap; benefits module importers, not evidenced for Josh</td><td>02</td></tr>
+    <tr><td>Audio effects / DSP layer</td><td>Large; changes the .fur format inside a fork; upstream is building it</td><td>—</td></tr>
+    <tr><td>Wavetable reorder leaves stale references</td><td>A bug (<code>engine.cpp:3326</code>), best reported upstream</td><td>—</td></tr>
+    <tr><td>Compiled instruments for GB and others</td><td>Niche need for sound-driver authors</td><td>02</td></tr>
+    <tr><td>Bundled instrument browser</td><td>Better exposed to Claude as a catalog tool inside 03</td><td>03</td></tr>
+    <tr><td>DAW plugin (#1804)</td><td>Top upstream request, but large and unrelated to Josh's goal</td><td>03</td></tr>
+    <tr><td>Piano roll (#2311)</td><td>Large GUI work; 03 partly covers composing without the grid</td><td>03</td></tr>
+  </tbody></table></div></div></details>
+  <details><summary><b>Killed</b><span class="pill kill">8</span></summary><div class="card-body" style="padding-left:14px"><div class="scroll"><table class="ledger">
+    <thead><tr><th>Idea</th><th>Reason</th><th>Closest</th></tr></thead><tbody>
+    <tr><td>Richer <code>-info</code> on its own</td><td>Merged into 02</td><td>02</td></tr>
+    <tr><td>Finish auto-clone</td><td>Upstream's own 0.7 item; a fork version would collide on sync</td><td>—</td></tr>
+    <tr><td>CSM macros</td><td>Upstream's own 0.7 item; same collision</td><td>—</td></tr>
+    <tr><td>Preview in file picker</td><td>Polish only</td><td>—</td></tr>
+    <tr><td>VGM / NSF / SID import</td><td>Rejected upstream (#1689); converting register logs to patterns is huge</td><td>—</td></tr>
+    <tr><td>Shared export-loop refactor</td><td>Internal only</td><td>02</td></tr>
+    <tr><td>Repo hygiene</td><td>Chores (stale merge file, vague error text)</td><td>—</td></tr>
+    <tr><td>Document S98 / JSON exports</td><td>Docs belong upstream</td><td>02</td></tr>
+  </tbody></table></div></div></details>
+</section>
+
+<section id="deliverables">
+  <h2><span class="tag">OUT</span>Write-ups</h2>
+  <p>Start with 002: it's the only full build plan, and 001, 003 and 004 all build on it. Paste a kickoff prompt into a fresh Claude Code session in this repo to begin that item.</p>
+  <div class="deliv">
+    <div class="d"><div class="row"><b>002 · CLI export parity</b><span class="pill adv">Handoff plan</span><code>ideas/002-cli-export-parity.md</code></div>
+      <p>Eight verified steps that add <code>-furout</code>, <code>-jsonout</code>, <code>-s98out</code> and VGM options, put duration and loop in <code>-info</code>, and fix the <code>-o</code> collision. Each step ends in a byte-identical check against the current build.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k2" type="button">Copy</button></div>
+      <pre class="kick" id="k2">Read C:\dev\furnace\furnace\ideas\002-cli-export-parity.md in full before doing anything. It is a self-contained implementation plan: follow the executor instructions at the top, run the drift check first, execute the steps in order verifying each, and stop at any STOP condition. Scope: add -furout/-jsonout/-s98out and VGM options to Furnace's CLI, add duration/loop to -info, fix the -o collision, update command-line.md. Work on a branch; when done, report against the Done criteria checklist.</pre></div>
+    <div class="d"><div class="row"><b>001 · JSON song import</b><span class="pill val">Spike brief</span><code>ideas/001-json-song-import.md</code></div>
+      <p>A one-day check of whether the JSON export round-trips losslessly, with a prototype loader. It ends in build, reshape (patch-only import) or drop.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k1" type="button">Copy</button></div>
+      <pre class="kick" id="k1">Read C:\dev\furnace\furnace\ideas\001-json-song-import.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: find out whether Furnace's JSON export can be loaded back losslessly, with a prototype loader. Do not build beyond the spike; prototype work happens behind a flag or on a branch.</pre></div>
+    <div class="d"><div class="row"><b>003 · Claude MCP server</b><span class="pill val">Spike brief</span><code>ideas/003-claude-mcp-server.md</code></div>
+      <p>Starts with a no-code walkthrough of whether Claude's musical output is usable, then a three-tool MCP prototype wrapping the CLI and one tuning attempt.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k3" type="button">Copy</button></div>
+      <pre class="kick" id="k3">Read C:\dev\furnace\furnace\ideas\003-claude-mcp-server.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: prove or disprove that Claude can compose and tune instruments in Furnace through a thin MCP server wrapping the Furnace CLI. Do not build beyond the spike; prototype work happens behind a flag or on a branch.</pre></div>
+    <div class="d"><div class="row"><b>004 · Listen report</b><span class="pill val">Spike brief</span><code>ideas/004-headless-listen-report.md</code></div>
+      <p>Renders one note, reports pitch, brightness and envelope as text, then blind-tests whether Claude can tell which of three instrument edits was made.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k4" type="button">Copy</button></div>
+      <pre class="kick" id="k4">Read C:\dev\furnace\furnace\ideas\004-headless-listen-report.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: test whether a text audio-analysis report lets Claude tell how a Furnace instrument edit changed the sound. Do not build beyond the spike; prototype work happens behind a flag or on a branch.</pre></div>
+    <div class="d"><div class="row"><b>005 · Sample pitch detect</b><span class="pill val">Spike brief</span><code>ideas/005-sample-pitch-detect.md</code></div>
+      <p>First asks whether you use recorded samples at all, then measures the tuner's accuracy offline before any GUI change.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k5" type="button">Copy</button></div>
+      <pre class="kick" id="k5">Read C:\dev\furnace\furnace\ideas\005-sample-pitch-detect.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: check whether automatic sample pitch detection is accurate and wanted. Do not build beyond the spike; prototype work happens behind a flag or on a branch.</pre></div>
+    <div class="d"><div class="row"><b>006 · Chip emulators with Claude</b><span class="pill val">Spike brief</span><code>ideas/006-chip-emulators-with-claude.md</code></div>
+      <p>Writes a 16-touchpoint recipe for adding a chip, settles a fork-only chip-ID range with you, and proves both on one pilot chip checked against a reference core.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k6" type="button">Copy</button></div>
+      <pre class="kick" id="k6">Read C:\dev\furnace\furnace\ideas\006-chip-emulators-with-claude.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: write a repeatable recipe for adding a sound chip to this Furnace fork, settle a fork-only chip-ID policy with Josh, and prove both on one pilot chip with a reference-comparison check. Do not build beyond the spike; prototype work happens on a branch. Ask Josh to choose the pilot chip and approve the ID range before writing chip code.</pre></div>
+  </div>
+</section>
+
+<footer>Generated by /ideate at <span class="mono">5b9c00314</span>. The markdown files in <code>ideas/</code> are the source of truth.</footer>
+</div>
+<script>
+document.addEventListener('click',function(e){
+  var b=e.target.closest('button.copy'); if(!b) return;
+  var pre=document.getElementById(b.dataset.for); if(!pre) return;
+  var done=function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)};
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(pre.textContent).then(done,function(){sel(pre)});
+  } else sel(pre);
+  function sel(el){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected, press Ctrl+C'}
+});
+</script>

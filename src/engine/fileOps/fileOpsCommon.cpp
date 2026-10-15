@@ -139,6 +139,18 @@ bool DivEngine::load(unsigned char* f, size_t slen, const char* nameHint) {
     len=slen;
   }
 
+#ifdef WITH_JSON
+  // step 1.5: JSON song (starts with '{' after whitespace or a UTF-8 BOM)
+  {
+    size_t pos=0;
+    if (len>=3 && file[0]==0xef && file[1]==0xbb && file[2]==0xbf) pos=3;
+    while (pos<len && (file[pos]==' ' || file[pos]=='\t' || file[pos]=='\r' || file[pos]=='\n')) pos++;
+    if (pos<len && file[pos]=='{') {
+      return loadJSON(file,len);
+    }
+  }
+#endif
+
   // step 2: try loading as .fur, .dmf, or another magic-ful format
   if (memcmp(file,DIV_DMF_MAGIC,16)==0) {
     return loadDMF(file,len); 

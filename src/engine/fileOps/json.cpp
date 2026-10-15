@@ -1066,3 +1066,580 @@ JSON serializeMacro(DivInstrumentMacro* macro) {
   }
   return json;
 }
+
+// JSON import (fork prototype, ideas/001).
+// mirrors saveJSON() above. fields that saveJSON doesn't write keep their defaults.
+
+template<typename T> static void jget(const JSON& j, const char* key, T& out) {
+  if (!j.is_object()) return;
+  auto it=j.find(key);
+  if (it==j.end() || it->is_null()) return;
+  out=it->get<T>();
+}
+
+static void deserializeMacro(const JSON& j, DivInstrumentMacro* m) {
+  int len=j.at("length").get<int>();
+  if (len<0 || len>255) throw std::out_of_range("macro length out of range");
+  m->len=len;
+  m->loop=(unsigned char)j.at("loop").get<int>();
+  m->rel=(unsigned char)j.at("release").get<int>();
+  jget(j,"mode",m->mode);
+  m->delay=(unsigned char)j.value("delay",0);
+  m->speed=(unsigned char)j.value("speed",1);
+  int type=j.value("type",0)&3;
+  m->open=(j.value("open",0)&1)|(type<<1)|(j.value("instantRelease",false)?8:0)|((j.value("wordSize",0)&3)<<5);
+  memset(m->val,0,sizeof(m->val));
+  const JSON& d=j.at("data");
+  switch (type) {
+    case 0:
+      if (d.size()>256) throw std::out_of_range("macro data too long");
+      for (size_t i=0; i<d.size(); i++) m->val[i]=d[i].get<int>();
+      break;
+    case 1:
+      m->val[0]=d.value("bottom",0);
+      m->val[1]=d.value("top",0);
+      m->val[2]=d.value("attack",0);
+      m->val[3]=d.value("hold",0);
+      m->val[4]=d.value("decay",0);
+      m->val[5]=d.value("sustain",0);
+      m->val[6]=d.value("susTime",0);
+      m->val[7]=d.value("susDecay",0);
+      m->val[8]=d.value("release",0);
+      break;
+    case 2:
+      m->val[0]=d.value("bottom",0);
+      m->val[1]=d.value("top",0);
+      m->val[11]=d.value("speed",0);
+      m->val[12]=d.value("shape",0);
+      m->val[13]=d.value("phase",0);
+      break;
+  }
+}
+
+static DivInstrument* deserializeInstrument(const JSON& j) {
+  DivInstrument* ins=new DivInstrument;
+  try {
+    jget(j,"name",ins->name);
+    int type=j.at("type").get<int>();
+    if (type<0 || type>=DIV_INS_MAX) throw std::out_of_range("invalid instrument type");
+    ins->type=(DivInstrumentType)type;
+
+    if (j.contains("macros")) for (const JSON& mj: j["macros"]) {
+      int code=mj.at("code").get<int>();
+      if (code<DIV_MACRO_VOL || code>DIV_MACRO_EX10) throw std::out_of_range("invalid macro code");
+      DivInstrumentMacro* m=ins->std.macroByType((DivMacroType)code);
+      if (m==NULL) throw std::out_of_range("invalid macro code");
+      deserializeMacro(mj,m);
+    }
+
+#define GET_VALUE(v,x) jget(jv,#x,ins->v.x)
+    if (j.contains("fm")) {
+      const JSON& jv=j["fm"];
+      GET_VALUE(fm,alg); GET_VALUE(fm,fb); GET_VALUE(fm,fms); GET_VALUE(fm,ams);
+      GET_VALUE(fm,fmsLFO); GET_VALUE(fm,amsLFO); GET_VALUE(fm,ops); GET_VALUE(fm,opllPreset);
+      GET_VALUE(fm,block); GET_VALUE(fm,fixedDrums); GET_VALUE(fm,kickFreq);
+      GET_VALUE(fm,snareHatFreq); GET_VALUE(fm,tomTopFreq);
+      const JSON& ops=jv.at("operators");
+      for (int i=0; i<4 && i<(int)ops.size(); i++) {
+        const JSON& op=ops[i];
+#define GET_OP_VALUE(x) jget(op,#x,ins->fm.op[i].x)
+        GET_OP_VALUE(enable); GET_OP_VALUE(am); GET_OP_VALUE(ar); GET_OP_VALUE(dr);
+        GET_OP_VALUE(mult); GET_OP_VALUE(rr); GET_OP_VALUE(sl); GET_OP_VALUE(tl);
+        GET_OP_VALUE(dt2); GET_OP_VALUE(rs); GET_OP_VALUE(dt); GET_OP_VALUE(d2r);
+        GET_OP_VALUE(ssgEnv); GET_OP_VALUE(dam); GET_OP_VALUE(dvb); GET_OP_VALUE(egt);
+        GET_OP_VALUE(ksl); GET_OP_VALUE(sus); GET_OP_VALUE(vib); GET_OP_VALUE(ws);
+        GET_OP_VALUE(ksr); GET_OP_VALUE(kvs);
+#undef GET_OP_VALUE
+      }
+    }
+    if (j.contains("gb")) {
+      const JSON& jv=j["gb"];
+      GET_VALUE(gb,envVol); GET_VALUE(gb,envDir); GET_VALUE(gb,envLen); GET_VALUE(gb,soundLen);
+      GET_VALUE(gb,hwSeqLen); GET_VALUE(gb,softEnv); GET_VALUE(gb,alwaysInit); GET_VALUE(gb,doubleWave);
+      if (jv.contains("hwSeq")) {
+        const JSON& seq=jv["hwSeq"];
+        for (size_t i=0; i<seq.size() && i<256; i++) {
+          jget(seq[i],"cmd",ins->gb.hwSeq[i].cmd);
+          jget(seq[i],"data",ins->gb.hwSeq[i].data);
+        }
+      }
+    }
+    if (j.contains("64")) {
+      const JSON& jv=j["64"];
+      const JSON& wf=jv.at("waveforms");
+      jget(wf,"tri",ins->c64.triOn); jget(wf,"saw",ins->c64.sawOn);
+      jget(wf,"pulse",ins->c64.pulseOn); jget(wf,"noise",ins->c64.noiseOn);
+      const JSON& env=jv.at("envelope");
+      jget(env,"attack",ins->c64.a); jget(env,"decay",ins->c64.d);
+      jget(env,"sustain",ins->c64.s); jget(env,"release",ins->c64.r);
+      const JSON& flt=jv.at("filter");
+      jget(flt,"to",ins->c64.toFilter); jget(flt,"init",ins->c64.initFilter);
+      jget(flt,"lowPass",ins->c64.lp); jget(flt,"highPass",ins->c64.hp);
+      jget(flt,"bandPass",ins->c64.bp); jget(flt,"cutoff",ins->c64.cut);
+      jget(flt,"resonance",ins->c64.res); jget(flt,"isAbsolute",ins->c64.filterIsAbs);
+      GET_VALUE(c64,duty); GET_VALUE(c64,ringMod); GET_VALUE(c64,oscSync); GET_VALUE(c64,dutyIsAbs);
+      GET_VALUE(c64,noTest); GET_VALUE(c64,resetDuty); GET_VALUE(c64,ch3off);
+    }
+    if (j.contains("amiga")) {
+      const JSON& jv=j["amiga"];
+      GET_VALUE(amiga,initSample); GET_VALUE(amiga,useNoteMap); GET_VALUE(amiga,useSample);
+      GET_VALUE(amiga,useWave); GET_VALUE(amiga,waveLen);
+      if (jv.contains("sampleMap")) {
+        const JSON& map=jv["sampleMap"];
+        for (size_t i=0; i<map.size() && i<180; i++) {
+          jget(map[i],"freq",ins->amiga.noteMap[i].freq);
+          jget(map[i],"map",ins->amiga.noteMap[i].map);
+        }
+      }
+    }
+    if (j.contains("nes")) {
+      const JSON& jv=j["nes"];
+      jget(jv,"useNoteMap",ins->amiga.useNoteMap);
+      if (jv.contains("sampleMap")) {
+        const JSON& map=jv["sampleMap"];
+        for (size_t i=0; i<map.size() && i<180; i++) {
+          jget(map[i],"dpcmFreq",ins->amiga.noteMap[i].dpcmFreq);
+          jget(map[i],"dpcmDelta",ins->amiga.noteMap[i].dpcmDelta);
+        }
+      }
+    }
+    if (j.contains("x1_010")) {
+      const JSON& jv=j["x1_010"];
+      GET_VALUE(x1_010,bankSlot);
+    }
+    if (j.contains("n163")) {
+      const JSON& jv=j["n163"];
+      GET_VALUE(n163,wave); GET_VALUE(n163,wavePos); GET_VALUE(n163,waveLen); GET_VALUE(n163,perChanPos);
+      if (jv.contains("wavePosCh")) for (size_t i=0; i<jv["wavePosCh"].size() && i<8; i++) ins->n163.wavePosCh[i]=jv["wavePosCh"][i].get<int>();
+      if (jv.contains("waveLenCh")) for (size_t i=0; i<jv["waveLenCh"].size() && i<8; i++) ins->n163.waveLenCh[i]=jv["waveLenCh"][i].get<int>();
+    }
+    if (j.contains("fds")) {
+      const JSON& jv=j["fds"];
+      GET_VALUE(fds,modSpeed); GET_VALUE(fds,modDepth); GET_VALUE(fds,initModTableWithFirstWave);
+      if (jv.contains("modTable")) for (size_t i=0; i<jv["modTable"].size() && i<32; i++) ins->fds.modTable[i]=jv["modTable"][i].get<int>();
+    }
+    if (j.contains("multipcm")) {
+      const JSON& jv=j["multipcm"];
+      GET_VALUE(multipcm,ar); GET_VALUE(multipcm,d1r); GET_VALUE(multipcm,dl); GET_VALUE(multipcm,d2r);
+      GET_VALUE(multipcm,rr); GET_VALUE(multipcm,rc); GET_VALUE(multipcm,lfo); GET_VALUE(multipcm,vib);
+      GET_VALUE(multipcm,am); GET_VALUE(multipcm,damp); GET_VALUE(multipcm,pseudoReverb);
+      GET_VALUE(multipcm,lfoReset); GET_VALUE(multipcm,levelDirect);
+    }
+    if (j.contains("su")) {
+      const JSON& jv=j["su"];
+      GET_VALUE(su,switchRoles); GET_VALUE(su,hwSeqLen);
+      if (jv.contains("hwSeq")) {
+        const JSON& seq=jv["hwSeq"];
+        for (size_t i=0; i<seq.size() && i<256; i++) {
+          jget(seq[i],"cmd",ins->su.hwSeq[i].cmd);
+          jget(seq[i],"bound",ins->su.hwSeq[i].bound);
+          jget(seq[i],"val",ins->su.hwSeq[i].val);
+          jget(seq[i],"speed",ins->su.hwSeq[i].speed);
+        }
+      }
+    }
+    if (j.contains("es5506")) {
+      const JSON& jf=j["es5506"].at("filter");
+      const JSON& je=j["es5506"].at("envelope");
+      jget(jf,"mode",ins->es5506.filter.mode); jget(jf,"k1",ins->es5506.filter.k1); jget(jf,"k2",ins->es5506.filter.k2);
+      jget(je,"ecount",ins->es5506.envelope.ecount); jget(je,"lVRamp",ins->es5506.envelope.lVRamp);
+      jget(je,"rVRamp",ins->es5506.envelope.rVRamp); jget(je,"k1Ramp",ins->es5506.envelope.k1Ramp);
+      jget(je,"k2Ramp",ins->es5506.envelope.k2Ramp); jget(je,"k1Slow",ins->es5506.envelope.k1Slow);
+      jget(je,"k2Slow",ins->es5506.envelope.k2Slow);
+    }
+    if (j.contains("snes")) {
+      const JSON& jv=j["snes"];
+      GET_VALUE(snes,useEnv); GET_VALUE(snes,sus); GET_VALUE(snes,gainMode); GET_VALUE(snes,a);
+      GET_VALUE(snes,d); GET_VALUE(snes,s); GET_VALUE(snes,r); GET_VALUE(snes,d2);
+    }
+    if (j.contains("esfm")) {
+      const JSON& jv=j["esfm"];
+      GET_VALUE(esfm,noise);
+      if (jv.contains("op")) for (int i=0; i<4 && i<(int)jv["op"].size(); i++) {
+        const JSON& op=jv["op"][i];
+#define GET_OP_VALUE(x) jget(op,#x,ins->esfm.op[i].x)
+        GET_OP_VALUE(delay); GET_OP_VALUE(outLvl); GET_OP_VALUE(modIn); GET_OP_VALUE(left);
+        GET_OP_VALUE(right); GET_OP_VALUE(fixed); GET_OP_VALUE(ct); GET_OP_VALUE(dt);
+#undef GET_OP_VALUE
+      }
+    }
+    if (j.contains("powernoise")) {
+      const JSON& jv=j["powernoise"];
+      GET_VALUE(powernoise,octave);
+    }
+    if (j.contains("waveSynth")) {
+      const JSON& jv=j["waveSynth"];
+      GET_VALUE(ws,wave1); GET_VALUE(ws,wave2); GET_VALUE(ws,rateDivider); GET_VALUE(ws,effect);
+      GET_VALUE(ws,oneShot); GET_VALUE(ws,enabled); GET_VALUE(ws,global); GET_VALUE(ws,speed);
+      GET_VALUE(ws,param1); GET_VALUE(ws,param2); GET_VALUE(ws,param3); GET_VALUE(ws,param4);
+    }
+    if (j.contains("sid2")) {
+      const JSON& jv=j["sid2"];
+      GET_VALUE(sid2,volume); GET_VALUE(sid2,mixMode); GET_VALUE(sid2,noiseMode);
+    }
+    if (j.contains("sid3")) {
+      const JSON& jv=j["sid3"];
+      const JSON& we=jv.at("waveEnable");
+      jget(we,"noise",ins->sid3.noiseOn); jget(we,"pulse",ins->sid3.pulseOn);
+      jget(we,"saw",ins->sid3.sawOn); jget(we,"tri",ins->sid3.triOn);
+      if (we.contains("special") && we["special"].is_number()) {
+        ins->sid3.specialWaveOn=true;
+        ins->sid3.special_wave=we["special"].get<int>();
+      } else {
+        ins->sid3.specialWaveOn=false;
+      }
+      const JSON& env=jv.at("envelope");
+      jget(env,"attack",ins->sid3.a); jget(env,"decay",ins->sid3.d); jget(env,"sustain",ins->sid3.s);
+      jget(env,"susRate",ins->sid3.sr); jget(env,"release",ins->sid3.r);
+      jget(jv.at("phaseMod"),"enable",ins->sid3.phase_mod); jget(jv.at("phaseMod"),"source",ins->sid3.phase_mod_source);
+      jget(jv.at("ringMod"),"enable",ins->sid3.ringMod); jget(jv.at("ringMod"),"source",ins->sid3.ring_mod_source);
+      jget(jv.at("oscSync"),"enable",ins->sid3.oscSync); jget(jv.at("oscSync"),"source",ins->sid3.sync_source);
+      GET_VALUE(sid3,mixMode); GET_VALUE(sid3,duty); GET_VALUE(sid3,oneBitNoise); GET_VALUE(sid3,separateNoisePitch);
+      GET_VALUE(sid3,doWavetable); GET_VALUE(sid3,resetDuty); GET_VALUE(sid3,dutyIsAbs);
+      GET_VALUE(sid3,phaseInv); GET_VALUE(sid3,feedback);
+      if (jv.contains("filters")) for (int i=0; i<4 && i<(int)jv["filters"].size(); i++) {
+        const JSON& f=jv["filters"][i];
+        DivInstrumentSID3::Filter& filt=ins->sid3.filt[i];
+        jget(f,"enable",filt.enabled); jget(f,"init",filt.init); jget(f,"absoluteCutoff",filt.absoluteCutoff);
+        jget(f,"bindCutoffOnNote",filt.bindCutoffOnNote); jget(f,"bindCutoffToNote",filt.bindCutoffToNote);
+        jget(f,"bindCutoffToNoteDir",filt.bindCutoffToNoteDir); jget(f,"bindResonanceOnNote",filt.bindResonanceOnNote);
+        jget(f,"bindResonanceToNote",filt.bindResonanceToNote); jget(f,"bindResonanceToNoteDir",filt.bindResonanceToNoteDir);
+        jget(f,"cutoff",filt.cutoff); jget(f,"resonance",filt.resonance); jget(f,"output_volume",filt.output_volume);
+        jget(f,"distortion_level",filt.distortion_level); jget(f,"mode",filt.mode); jget(f,"filter_matrix",filt.filter_matrix);
+        jget(f,"bindCutoffToNoteStrength",filt.bindCutoffToNoteStrength); jget(f,"bindCutoffToNoteCenter",filt.bindCutoffToNoteCenter);
+        jget(f,"bindResonanceToNoteStrength",filt.bindResonanceToNoteStrength); jget(f,"bindResonanceToNoteCenter",filt.bindResonanceToNoteCenter);
+      }
+    }
+    if (j.contains("opMacro")) {
+      const JSON& om=j["opMacro"];
+      for (int i=0; i<4 && i<(int)om.size(); i++) {
+        if (!om[i].is_object()) continue;
+        DivInstrumentSTD::OpMacro& m=ins->std.opMacros[i];
+#define READ_OP_MACRO(x) if (om[i].contains(#x)) deserializeMacro(om[i][#x],&m. x ## Macro);
+        READ_OP_MACRO(am) READ_OP_MACRO(ar) READ_OP_MACRO(dr) READ_OP_MACRO(mult)
+        READ_OP_MACRO(rr) READ_OP_MACRO(sl) READ_OP_MACRO(tl) READ_OP_MACRO(dt2)
+        READ_OP_MACRO(rs) READ_OP_MACRO(dt) READ_OP_MACRO(d2r) READ_OP_MACRO(ssg)
+        READ_OP_MACRO(dam) READ_OP_MACRO(dvb) READ_OP_MACRO(egt) READ_OP_MACRO(ksl)
+        READ_OP_MACRO(sus) READ_OP_MACRO(vib) READ_OP_MACRO(ws) READ_OP_MACRO(ksr)
+#undef READ_OP_MACRO
+      }
+    }
+    if (j.contains("klattsch")) {
+      const JSON& jv=j["klattsch"];
+      GET_VALUE(klattsch,transition); GET_VALUE(klattsch,voicing); GET_VALUE(klattsch,aspiration);
+      GET_VALUE(klattsch,tilt); GET_VALUE(klattsch,effort); GET_VALUE(klattsch,vibrato);
+      GET_VALUE(klattsch,tremolo); GET_VALUE(klattsch,gain); GET_VALUE(klattsch,bandwidth);
+      GET_VALUE(klattsch,formantShift);
+    }
+#undef GET_VALUE
+  } catch (...) {
+    delete ins;
+    throw;
+  }
+  return ins;
+}
+
+static DivWavetable* deserializeWavetable(const JSON& j) {
+  DivWavetable* wave=new DivWavetable;
+  try {
+    int len=j.at("len").get<int>();
+    if (len<1 || len>256) throw std::out_of_range("wavetable length out of range");
+    wave->len=len;
+    wave->max=j.at("max").get<int>();
+    const JSON& d=j.at("data");
+    for (int i=0; i<len && i<(int)d.size(); i++) wave->data[i]=d[i].get<int>();
+  } catch (...) {
+    delete wave;
+    throw;
+  }
+  return wave;
+}
+
+static DivSample* deserializeSample(const JSON& j) {
+  DivSample* sample=new DivSample;
+  try {
+    jget(j,"name",sample->name);
+    jget(j,"centerRate",sample->centerRate);
+    const JSON& loop=j.at("loop");
+    jget(loop,"start",sample->loopStart);
+    jget(loop,"end",sample->loopEnd);
+    jget(loop,"enabled",sample->loop);
+    sample->loopMode=(DivSampleLoopMode)loop.value("mode",0);
+    sample->depth=(DivSampleDepth)j.at("depth").get<int>();
+    jget(j,"brrEmphasis",sample->brrEmphasis);
+    jget(j,"brrNoFilter",sample->brrNoFilter);
+    jget(j,"dither",sample->dither);
+    int count=j.at("samples").get<int>();
+    if (count<0 || count>16777215) throw std::out_of_range("sample length out of range");
+    if (j.contains("renderOn")) {
+      const JSON& r=j["renderOn"];
+      for (int i=0; i<DIV_MAX_SAMPLE_TYPE && i<(int)r.size(); i++) {
+        for (int k=0; k<DIV_MAX_CHIPS && k<(int)r[i].size(); k++) {
+          sample->renderOn[i][k]=r[i][k].get<bool>();
+        }
+      }
+    }
+    if (count>0) {
+      if (!sample->init(count)) throw std::out_of_range("could not allocate sample");
+      const JSON& d=j.at("data");
+      unsigned int bufLen=sample->getCurBufLen();
+      if (d.size()!=bufLen) throw std::out_of_range("sample data size does not match length and depth");
+      unsigned char* buf=(unsigned char*)sample->getCurBuf();
+      for (unsigned int i=0; i<bufLen; i++) buf[i]=d[i].get<unsigned char>();
+    }
+  } catch (...) {
+    delete sample;
+    throw;
+  }
+  return sample;
+}
+
+static void deserializePattern(const JSON& j, DivPattern* pat, int patLen) {
+  jget(j,"name",pat->name);
+  const JSON& rows=j.at("rows");
+  if ((int)rows.size()>patLen) throw std::out_of_range("pattern has more rows than the pattern length");
+  for (int i=0; i<(int)rows.size(); i++) {
+    const JSON& row=rows[i];
+    if (!row.is_object()) continue;
+    short* r=pat->newData[i];
+    if (row.contains("rawFreq")) {
+      unsigned int freq=row["rawFreq"].get<unsigned int>();
+      r[DIV_PAT_NOTE]=DIV_NOTE_RAW;
+      r[DIV_PAT_RAW0]=freq&255;
+      r[DIV_PAT_RAW1]=(freq>>8)&255;
+      r[DIV_PAT_RAW2]=(freq>>16)&255;
+      r[DIV_PAT_RAW3]=(freq>>24)&255;
+    } else {
+      jget(row,"note",r[DIV_PAT_NOTE]);
+    }
+    jget(row,"ins",r[DIV_PAT_INS]);
+    jget(row,"vol",r[DIV_PAT_VOL]);
+    if (row.contains("effects")) {
+      const JSON& fx=row["effects"];
+      if (fx.size()>DIV_MAX_EFFECTS) throw std::out_of_range("too many effect columns");
+      for (int k=0; k<(int)fx.size(); k++) {
+        jget(fx[k],"code",r[DIV_PAT_FX(k)]);
+        jget(fx[k],"value",r[DIV_PAT_FXVAL(k)]);
+      }
+    }
+  }
+}
+
+bool DivEngine::loadJSON(unsigned char* file, size_t len) {
+  DivSong ds;
+  warnings="";
+  try {
+    JSON json=JSON::parse(file,file+len);
+    delete[] file;
+    file=NULL;
+
+    ds.version=DIV_ENGINE_VERSION;
+
+    // song info
+    if (json.contains("songInfo")) {
+      const JSON& si=json["songInfo"];
+      jget(si,"name",ds.name);
+      jget(si,"author",ds.author);
+      jget(si,"album",ds.category);
+      jget(si,"tuning",ds.tuning);
+      jget(si,"comments",ds.notes);
+      if (si.contains("system") && si["system"].is_array() && si["system"].size()==2) {
+        ds.autoSystem=si["system"][0].get<bool>();
+        ds.systemName=si["system"][1].get<String>();
+      }
+    }
+    if (json.contains("grooves")) for (const JSON& g: json["grooves"]) {
+      DivGroovePattern groove;
+      const JSON& val=g.at("val");
+      groove.len=g.at("len").get<int>();
+      for (size_t i=0; i<val.size() && i<16; i++) groove.val[i]=val[i].get<int>();
+      groove.checkBounds();
+      ds.grooves.push_back(groove);
+    }
+    if (json.contains("patchbay")) {
+      const JSON& pb=json["patchbay"];
+      jget(pb,"auto",ds.patchbayAuto);
+      if (pb.contains("connections")) for (const JSON& c: pb["connections"]) ds.patchbay.push_back(c.get<unsigned int>());
+    }
+
+    // chips
+    const JSON& chips=json.at("chips");
+    if (chips.size()<1 || chips.size()>DIV_MAX_CHIPS) throw std::out_of_range("invalid chip count");
+    ds.systemLen=chips.size();
+    for (int i=0; i<ds.systemLen; i++) {
+      const JSON& c=chips[i];
+      int id=c.at("id").get<int>();
+      if (id<=0 || id>=DIV_SYSTEM_MAX || sysDefs[id]==NULL) throw std::out_of_range(fmt::sprintf("chip %d: unknown chip ID %d",i,id));
+      ds.system[i]=(DivSystem)id;
+      jget(c,"volume",ds.systemVol[i]);
+      jget(c,"panning",ds.systemPan[i]);
+      jget(c,"frontRear",ds.systemPanFR[i]);
+      ds.systemFlags[i].clear();
+      if (c.contains("flags")) for (auto& f: c["flags"].items()) {
+        ds.systemFlags[i].set(f.key(),f.value().get<String>());
+      }
+    }
+    ds.initDefaultSystemChans();
+    ds.recalcChans();
+
+    // assets
+    if (json.contains("instruments")) for (const JSON& i: json["instruments"]) {
+      if (ds.ins.size()>=256) throw std::out_of_range("too many instruments");
+      ds.ins.push_back(deserializeInstrument(i));
+    }
+    if (json.contains("wavetables")) for (const JSON& i: json["wavetables"]) {
+      if (ds.wave.size()>=32768) throw std::out_of_range("too many wavetables");
+      ds.wave.push_back(deserializeWavetable(i));
+    }
+    if (json.contains("samples")) for (const JSON& i: json["samples"]) {
+      if (ds.sample.size()>=32768) throw std::out_of_range("too many samples");
+      ds.sample.push_back(deserializeSample(i));
+    }
+    ds.insLen=ds.ins.size();
+    ds.waveLen=ds.wave.size();
+    ds.sampleLen=ds.sample.size();
+
+    // sub-songs
+    const JSON& subsongs=json.at("subsongs");
+    if (subsongs.size()<1 || subsongs.size()>127) throw std::out_of_range("invalid sub-song count");
+    for (size_t si=0; si<subsongs.size(); si++) {
+      const JSON& sj=subsongs[si];
+      if (si>0) ds.subsong.push_back(new DivSubSong);
+      DivSubSong* s=ds.subsong[si];
+      jget(sj,"name",s->name);
+      jget(sj,"notes",s->notes);
+      jget(sj,"tickRate",s->hz);
+      if (sj.contains("speeds")) {
+        const JSON& sp=sj["speeds"];
+        s->speeds.len=0;
+        for (size_t i=0; i<sp.size() && i<16; i++) s->speeds.val[s->speeds.len++]=sp[i].get<int>();
+        s->speeds.checkBounds();
+      }
+      if (sj.contains("virtualTempo")) {
+        s->virtualTempoN=sj["virtualTempo"].at(0).get<int>();
+        s->virtualTempoD=sj["virtualTempo"].at(1).get<int>();
+      }
+      if (sj.contains("highlights")) {
+        s->hilightA=sj["highlights"].at(0).get<int>();
+        s->hilightB=sj["highlights"].at(1).get<int>();
+      }
+      s->patLen=sj.at("patternLength").get<int>();
+      if (s->patLen<1 || s->patLen>DIV_MAX_ROWS) throw std::out_of_range("pattern length out of range");
+      s->ordersLen=sj.at("orderLength").get<int>();
+      if (s->ordersLen<1 || s->ordersLen>DIV_MAX_PATTERNS) throw std::out_of_range("order length out of range");
+
+      const JSON& chanData=sj.at("channelData");
+      if ((int)chanData.size()!=ds.chans) {
+        throw std::out_of_range(fmt::sprintf("sub-song %d has %d channels but the chips have %d",(int)si,(int)chanData.size(),ds.chans));
+      }
+      for (int c=0; c<ds.chans; c++) {
+        const JSON& cd=chanData[c];
+        int fxCols=cd.value("effectColumns",1);
+        if (fxCols<1 || fxCols>DIV_MAX_EFFECTS) throw std::out_of_range("effect column count out of range");
+        s->pat[c].effectCols=fxCols;
+        if (cd.contains("show")) {
+          jget(cd["show"],"pattern",s->chanShow[c]);
+          jget(cd["show"],"chanOsc",s->chanShowChanOsc[c]);
+        }
+        jget(cd,"collapse",s->chanCollapse[c]);
+        jget(cd,"name",s->chanName[c]);
+        jget(cd,"shortName",s->chanShortName[c]);
+        if (cd.contains("color")) {
+          const JSON& col=cd["color"];
+          s->chanColor[c]=(col.value("r",0)&255)|((col.value("g",0)&255)<<8)|((col.value("b",0)&255)<<16)|((unsigned int)(col.value("a",0)&255)<<24);
+        }
+      }
+
+      if (sj.contains("orders")) {
+        const JSON& ord=sj["orders"];
+        if ((int)ord.size()!=ds.chans) throw std::out_of_range("order table channel count mismatch");
+        for (int c=0; c<ds.chans; c++) {
+          if ((int)ord[c].size()<s->ordersLen) throw std::out_of_range("order table too short");
+          for (int k=0; k<s->ordersLen; k++) {
+            int o=ord[c][k].get<int>();
+            if (o<0 || o>=DIV_MAX_PATTERNS) throw std::out_of_range("order value out of range");
+            s->orders.ord[c][k]=o;
+          }
+        }
+      }
+      if (sj.contains("patterns")) {
+        const JSON& pats=sj["patterns"];
+        if ((int)pats.size()!=ds.chans) throw std::out_of_range("pattern channel count mismatch");
+        for (int c=0; c<ds.chans; c++) {
+          if (pats[c].size()>DIV_MAX_PATTERNS) throw std::out_of_range("too many patterns");
+          for (int k=0; k<(int)pats[c].size(); k++) {
+            if (pats[c][k].is_null()) continue;
+            deserializePattern(pats[c][k],s->pat[c].getPattern(k,true),s->patLen);
+          }
+        }
+      }
+    }
+
+    // asset directories
+    if (json.contains("assetDirs") && json["assetDirs"].is_object()) {
+      const JSON& ad=json["assetDirs"];
+      const char* keys[3]={"ins","wave","sample"};
+      std::vector<DivAssetDir>* dirs[3]={&ds.insDir,&ds.waveDir,&ds.sampleDir};
+      for (int t=0; t<3; t++) {
+        if (!ad.contains(keys[t])) continue;
+        for (const JSON& d: ad[keys[t]]) {
+          DivAssetDir dir;
+          jget(d,"name",dir.name);
+          if (d.contains("assets")) for (const JSON& a: d["assets"]) dir.entries.push_back(a.get<int>());
+          dirs[t]->push_back(dir);
+        }
+      }
+    }
+
+    // compat flags
+    if (json.contains("compatFlags")) {
+      const JSON& cf=json["compatFlags"];
+#define GET_FLAG(f) jget(cf,#f,ds.compatFlags.f)
+      GET_FLAG(limitSlides); GET_FLAG(linearPitch); GET_FLAG(pitchSlideSpeed); GET_FLAG(loopModality);
+      GET_FLAG(delayBehavior); GET_FLAG(jumpTreatment); GET_FLAG(properNoiseLayout); GET_FLAG(waveDutyIsVol);
+      GET_FLAG(resetMacroOnPorta); GET_FLAG(legacyVolumeSlides); GET_FLAG(compatibleArpeggio);
+      GET_FLAG(noteOffResetsSlides); GET_FLAG(targetResetsSlides); GET_FLAG(arpNonPorta);
+      GET_FLAG(algMacroBehavior); GET_FLAG(brokenShortcutSlides); GET_FLAG(ignoreDuplicateSlides);
+      GET_FLAG(stopPortaOnNoteOff); GET_FLAG(continuousVibrato); GET_FLAG(brokenDACMode); GET_FLAG(oneTickCut);
+      GET_FLAG(newInsTriggersInPorta); GET_FLAG(arp0Reset); GET_FLAG(brokenSpeedSel); GET_FLAG(noSlidesOnFirstTick);
+      GET_FLAG(rowResetsArpPos); GET_FLAG(ignoreJumpAtEnd); GET_FLAG(buggyPortaAfterSlide);
+      GET_FLAG(gbInsAffectsEnvelope); GET_FLAG(sharedExtStat); GET_FLAG(ignoreDACModeOutsideIntendedChannel);
+      GET_FLAG(e1e2AlsoTakePriority); GET_FLAG(newSegaPCM); GET_FLAG(fbPortaPause); GET_FLAG(snDutyReset);
+      GET_FLAG(pitchMacroIsLinear); GET_FLAG(oldOctaveBoundary); GET_FLAG(noOPN2Vol); GET_FLAG(newVolumeScaling);
+      GET_FLAG(volMacroLinger); GET_FLAG(brokenOutVol); GET_FLAG(brokenOutVol2); GET_FLAG(e1e2StopOnSameNote);
+      GET_FLAG(brokenPortaArp); GET_FLAG(snNoLowPeriods); GET_FLAG(disableSampleMacro); GET_FLAG(oldArpStrategy);
+      GET_FLAG(brokenPortaLegato); GET_FLAG(brokenFMOff); GET_FLAG(preNoteNoEffect); GET_FLAG(oldDPCM);
+      GET_FLAG(resetArpPhaseOnNewNote); GET_FLAG(ceilVolumeScaling); GET_FLAG(oldAlwaysSetVolume);
+      GET_FLAG(oldSampleOffset); GET_FLAG(oldCenterRate); GET_FLAG(noVolSlideReset);
+#undef GET_FLAG
+    } else {
+      addWarning("this JSON file has no compatibility flags. playback may differ from the original song.");
+    }
+  } catch (std::exception& e) {
+    logE("JSON import failed: %s",e.what());
+    lastError=fmt::sprintf("invalid JSON song: %s",e.what());
+    if (file!=NULL) delete[] file;
+    ds.unload();
+    return false;
+  }
+
+  ds.recalcChans();
+
+  if (active) quitDispatch();
+  BUSY_BEGIN_SOFT;
+  saveLock.lock();
+  song.unload();
+  song=ds;
+  hasLoadedSomething=true;
+  changeSong(0);
+  saveLock.unlock();
+  BUSY_END;
+  if (active) {
+    initDispatch();
+    BUSY_BEGIN;
+    renderSamples();
+    reset();
+    BUSY_END;
+  }
+  return true;
+}

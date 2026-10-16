@@ -76,6 +76,8 @@ class DivWorkPool;
 #define DIV_VERSION_XM 0xff06
 #define DIV_VERSION_IT 0xff07
 #define DIV_VERSION_MIDI 0xff08
+// fork-only (ideas/001); kept high to stay clear of new upstream import formats
+#define DIV_VERSION_JSON 0xff80
 
 /**
  * used by the -view flag in command line player.

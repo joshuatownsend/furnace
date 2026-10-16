@@ -520,17 +520,11 @@ JSON serializeInstrument(DivInstrument* ins) {
       ins->std.ex10Macro.len) {
     featureMA=true;
   }
-  if (featureFM || featureS3) {
-    // check FM macros
+  {
+    // check operator macros on every instrument, like putInsData2() does for songs,
+    // so macros kept on a non-FM instrument (e.g. after a type change) aren't lost.
     int opCount=4;
     bool storeExtendedAsWell=true;
-    if (ins->type==DIV_INS_OPLL) {
-      opCount=2;
-    } else if (ins->type==DIV_INS_OPL) {
-      opCount=(ins->fm.ops==4)?4:2;
-    } else if (ins->type==DIV_INS_FM || ins->type==DIV_INS_OPM) {
-      storeExtendedAsWell=false;
-    }
     for (int i=0; i<opCount; i++) {
       const DivInstrumentSTD::OpMacro& m=ins->std.opMacros[i];
       if (m.amMacro.len ||
@@ -1400,10 +1394,6 @@ static DivSample* deserializeSample(const JSON& j) {
     jget(j,"name",sample->name);
     jget(j,"centerRate",sample->centerRate);
     const JSON& loop=j.at("loop");
-    jget(loop,"start",sample->loopStart);
-    jget(loop,"end",sample->loopEnd);
-    jget(loop,"enabled",sample->loop);
-    sample->loopMode=(DivSampleLoopMode)loop.value("mode",0);
     sample->depth=(DivSampleDepth)j.at("depth").get<int>();
     jget(j,"brrEmphasis",sample->brrEmphasis);
     jget(j,"brrNoFilter",sample->brrNoFilter);
@@ -1426,6 +1416,11 @@ static DivSample* deserializeSample(const JSON& j) {
       unsigned char* buf=(unsigned char*)sample->getCurBuf();
       for (unsigned int i=0; i<bufLen; i++) buf[i]=d[i].get<unsigned char>();
     }
+    // loop points go last: init() resets loopEnd to the sample length.
+    jget(loop,"start",sample->loopStart);
+    jget(loop,"end",sample->loopEnd);
+    jget(loop,"enabled",sample->loop);
+    sample->loopMode=(DivSampleLoopMode)loop.value("mode",0);
   } catch (...) {
     delete sample;
     throw;
@@ -1472,7 +1467,9 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
     delete[] file;
     file=NULL;
 
-    ds.version=DIV_ENGINE_VERSION;
+    // marked as imported, like .mod/.xm: the GUI's Save then asks for a new file
+    // instead of overwriting the .json with .fur data.
+    ds.version=DIV_VERSION_JSON;
 
     // song info
     if (json.contains("songInfo")) {

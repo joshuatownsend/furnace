@@ -780,7 +780,11 @@ bool writeOutputFile(SafeWriter* w, const String& path, const String& failMsg) {
       reportError(fmt::sprintf(_("could not write file! (%s)"),strerror(errno)));
       ok=false;
     }
-    fclose(f);
+    // buffered data may only fail to reach the disk when the file is closed
+    if (fclose(f)!=0 && ok) {
+      reportError(fmt::sprintf(_("could not write file! (%s)"),strerror(errno)));
+      ok=false;
+    }
   } else {
     reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
     ok=false;
@@ -1181,21 +1185,24 @@ int main(int argc, char** argv) {
       }
     }
     if (vgmOutName!="") {
-      SafeWriter* w=e.saveVGM(NULL,vgmLoop,vgmVersion,vgmHints,vgmOutDirect);
-      if (w!=NULL) {
-        FILE* f=ps_fopen(vgmOutName.c_str(),"wb");
-        if (f!=NULL) {
-          fwrite(w->getFinalBuf(),1,w->size(),f);
-          fclose(f);
+      // like the GUI's VGM export: chips the selected version can't hold are skipped,
+      // and with none left there is nothing to export.
+      bool hasOneAtLeast=false;
+      for (int i=0; i<e.song.systemLen; i++) {
+        int minVersion=e.minVGMVersion(e.song.system[i]);
+        if (minVersion==0) {
+          logW("VGM: chip %d (%s) is not supported by the VGM format and will be skipped",i+1,e.getSystemName(e.song.system[i]));
+        } else if (minVersion>vgmVersion) {
+          logW("VGM: chip %d (%s) needs VGM %d.%.2x or higher and will be skipped",i+1,e.getSystemName(e.song.system[i]),minVersion>>8,minVersion&0xff);
         } else {
-          outputFailed=true;
-          reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
+          hasOneAtLeast=true;
         }
-        w->finish();
-        delete w;
-      } else {
+      }
+      if (!hasOneAtLeast) {
         outputFailed=true;
-        reportError(_("could not write VGM!"));
+        reportError(fmt::sprintf(_("no chip in this song can be exported to VGM %d.%.2x!"),vgmVersion>>8,vgmVersion&0xff));
+      } else if (!writeOutputFile(e.saveVGM(NULL,vgmLoop,vgmVersion,vgmHints,vgmOutDirect),vgmOutName,_("could not write VGM!"))) {
+        outputFailed=true;
       }
     }
     if (outName!="") {

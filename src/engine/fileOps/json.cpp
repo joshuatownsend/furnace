@@ -55,6 +55,10 @@ SafeWriter* DivEngine::saveJSON(DivJSONExportOptions* options) {
       for (int i=0; i<g.len; i++) {
         groove["val"].push_back(g.val[i]);
       }
+      // all 16 slots, including unused ones (playback can read them)
+      for (int i=0; i<16; i++) {
+        groove["valFull"].push_back(g.val[i]);
+      }
       json["grooves"].push_back(groove);
     }
 
@@ -114,6 +118,8 @@ SafeWriter* DivEngine::saveJSON(DivJSONExportOptions* options) {
     subsong["speeds"]={};
     for (int j=0; j<s->speeds.len; j++)
       subsong["speeds"].push_back(s->speeds.val[j]);
+    for (int j=0; j<16; j++)
+      subsong["speedsFull"].push_back(s->speeds.val[j]);
     subsong["virtualTempo"]={s->virtualTempoN,s->virtualTempoD};
     subsong["patternLength"]=s->patLen;
     subsong["orderLength"]=s->ordersLen;
@@ -1487,6 +1493,10 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       const JSON& val=g.at("val");
       groove.len=g.at("len").get<int>();
       for (size_t i=0; i<val.size() && i<16; i++) groove.val[i]=val[i].get<int>();
+      if (g.contains("valFull")) {
+        const JSON& full=g["valFull"];
+        for (size_t i=groove.len; i<full.size() && i<16; i++) groove.val[i]=full[i].get<int>();
+      }
       groove.checkBounds();
       ds.grooves.push_back(groove);
     }
@@ -1559,6 +1569,10 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
         const JSON& sp=sj["speeds"];
         s->speeds.len=0;
         for (size_t i=0; i<sp.size() && i<16; i++) s->speeds.val[s->speeds.len++]=sp[i].get<int>();
+        if (sj.contains("speedsFull")) {
+          const JSON& full=sj["speedsFull"];
+          for (size_t i=s->speeds.len; i<full.size() && i<16; i++) s->speeds.val[i]=full[i].get<int>();
+        }
         s->speeds.checkBounds();
       }
       if (sj.contains("virtualTempo")) {

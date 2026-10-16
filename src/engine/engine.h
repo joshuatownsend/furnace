@@ -76,6 +76,8 @@ class DivWorkPool;
 #define DIV_VERSION_XM 0xff06
 #define DIV_VERSION_IT 0xff07
 #define DIV_VERSION_MIDI 0xff08
+// fork-only (ideas/001); kept high to stay clear of new upstream import formats
+#define DIV_VERSION_JSON 0xff80
 
 /**
  * used by the -view flag in command line player.
@@ -1079,6 +1081,10 @@ class DivEngine {
    * @param variantID Furnace variant ID (to accommodate certain Furnace forks).
    */
   bool loadFur(unsigned char* file, size_t len, int variantID=0);
+#ifdef WITH_JSON
+  // fork prototype (ideas/001): load a song written by saveJSON().
+  bool loadJSON(unsigned char* file, size_t len);
+#endif
   bool loadMod(unsigned char* file, size_t len);
   bool loadS3M(unsigned char* file, size_t len);
   bool loadXM(unsigned char* file, size_t len);

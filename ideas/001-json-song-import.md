@@ -55,6 +55,44 @@ Furnace can save a whole song as JSON but can't open one. Add a loader so a JSON
 - **Reshape it**: the export is badly lossy. Build a fork-owned "complete" JSON export first, or limit import to patches applied onto a loaded .fur (patterns and instruments only), which is enough for Claude-driven editing.
 - **Drop it**: the export misses core data (samples, chips) and fixing that means touching `fur.cpp` semantics.
 
+## Spike results (2026-10-15, branch `json-import-spike`)
+
+**Recommendation: Build it.** The decision criteria are met: every demo song now round-trips through JSON, and every gap was a field the export could add in one or two lines.
+
+Commits (local, not pushed): `314ce8cd1` loader, `ee6ff36b2`, `02b1ef350`, `cb253af94`, `8ea9541ea` export/import field additions.
+
+### What was built
+- `DivEngine::loadJSON()` at the end of `src/engine/fileOps/json.cpp`, declared in `engine.h` under `WITH_JSON`.
+- `DivEngine::load()` (`fileOpsCommon.cpp`) opens any file whose first non-blank byte is `{` as JSON. That means the CLI, drag-and-drop and command-line opening all work; no new flag is needed.
+- The loader builds a separate song and only replaces the open song once everything has loaded, copying `loadFur()`'s install sequence. On any error the open song is untouched.
+
+### Results
+- **All 481 demo songs** (`demos/*/*.fur`): rendered to WAV directly and via `-jsonout` → load JSON. 478 are byte-identical.
+- The other 3 are OPZ songs, and the cause is the OPZ emulator, not JSON. Their re-saved .fur files are byte-identical to the originals. Rendering the *original* "The bongos and teh base OPZx2" four times gave one odd result. Re-run one at a time, the other two match: four renders of `only_dream_opz` loaded from JSON all equal the original's audio. OPZ renders occasionally differ between runs of the same file. This is an upstream issue worth reporting separately.
+- **Hand-written JSON** (what Claude would produce): a file with only `chips: [{id: 4}]` and one subsong (`patternLength`, `orderLength`, four empty `channelData` entries, `orders`, a few note rows) loads and renders with sound. No instruments, songInfo or compat flags are needed. **Gotcha for 003:** notes use Furnace's numbering, not MIDI. Note 60 is C-0 and middle C (C-4) is 108.
+- **Malformed input**: 14 broken or hand-edited files (truncated, not JSON, unknown chip, wrong channel count, order out of range, huge pattern length, bad instrument type, over-long macro, short sample data, too many effect columns, wrong value types, empty object). Each is rejected with a readable error (e.g. `invalid JSON song: sub-song 0 has 6 channels but the chips have 7`), and nothing crashed. A pattern pointing at a missing instrument loads and plays, as .fur allows.
+- Load + render time is the same as .fur (under a second to load).
+
+### Answers to the open questions
+1. **Lossless?** Not originally; yes after the fixes below (see results).
+2. **Fields the export omitted, now added** (all affect playback): master volume; per-chip channel count; per-subsong effect divider and arp speed; FM `tremLFO`; SNES `gain`; the `arpSpeedGlobal` compat flag; the unused slots of speed and groove patterns (playback reads them); and any instrument data block that differs from default but doesn't match the instrument's type (the .fur writer keeps these; the JSON export dropped them).
+   **Still not exported, not affecting playback**: legacy VGM tag strings (composer, copyright, Japanese names, etc.), wavetable `min`, sample `legacyRate`, pattern rows past the pattern length, and DSP effect storage (unused in practice). Demo songs didn't carry these, so they're untested.
+3. **Samples** are stored as JSON arrays of raw bytes at the sample's current depth. This works, but the file grows about 4× per sample byte. Demo songs are 77–171 KB of JSON.
+4. **Reuse**: `DivSong` defaults plus `initDefaultSystemChans()`/`recalcChans()`, and `loadFur()`'s install sequence. No importer code needed copying.
+5. **Partial JSON** (patches onto an open song) was not prototyped. Whole-song import is enough for Claude-driven editing, and 003 can decide whether patches are needed.
+6. **Hook**: content sniffing in `load()`. Exports with `exportCompatFlags` off still load, with a warning that playback may differ.
+
+### Finished after the spike
+- The GUI Open dialog's "compatible files" filter now includes `*.json`. The GUI opens files through the same `load()` path, though the dialog wasn't clicked through by hand.
+- Detection: a `.json` file always goes to the JSON loader, so errors are reported. Any other file starting with `{` goes there only if it parses as a JSON object with `chips` or `subsongs`; otherwise it falls through to the other loaders. Tested: a `.mod` starting with `{` falls through, and a JSON song saved as `.dat` still loads.
+- `doc/8-advanced/command-line.md` mentions that JSON exports can be opened again.
+
+### Follow-ups
+- BSON/CBOR input isn't handled (only text JSON).
+- For 003: a full song is 77–171 KB, mostly 256 pattern slots per channel and sample bytes. Claude will want a compact view (or patches) rather than whole-file edits.
+- The export changes add new keys (`masterVolume`, `channels`, `speedsFull`, …); older Furnace builds ignore them.
+- The fixes edit lines inside upstream's `saveJSON()`, not just new code, so they may conflict when syncing with upstream.
+
 ## Kickoff prompt
 
 ```text

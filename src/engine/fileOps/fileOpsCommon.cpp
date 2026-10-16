@@ -139,6 +139,20 @@ bool DivEngine::load(unsigned char* f, size_t slen, const char* nameHint) {
     len=slen;
   }
 
+#ifdef WITH_JSON
+  // step 1.5: JSON song. a .json file always goes to the JSON loader (so errors are reported);
+  // other files starting with '{' only if they parse as a JSON song, otherwise they fall through
+  // (e.g. a .mod whose title starts with '{').
+  {
+    size_t pos=0;
+    if (len>=3 && file[0]==0xef && file[1]==0xbb && file[2]==0xbf) pos=3;
+    while (pos<len && (file[pos]==' ' || file[pos]=='\t' || file[pos]=='\r' || file[pos]=='\n')) pos++;
+    if (extS==".json" || (pos<len && file[pos]=='{' && isJSONSong(file,len))) {
+      return loadJSON(file,len);
+    }
+  }
+#endif
+
   // step 2: try loading as .fur, .dmf, or another magic-ful format
   if (memcmp(file,DIV_DMF_MAGIC,16)==0) {
     return loadDMF(file,len); 

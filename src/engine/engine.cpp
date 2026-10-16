@@ -2666,7 +2666,7 @@ void DivEngine::unmuteAll() {
   BUSY_END;
 }
 
-void DivEngine::dumpSongInfo() {
+void DivEngine::dumpSongInfo(int subSongIndex) {
   printf(
     "SONG INFORMATION\n"
     "- name: %s\n"
@@ -2685,11 +2685,17 @@ void DivEngine::dumpSongInfo() {
     song.notes.c_str()
   );
 
-  calcSongTimestamps();
-  if (curSubSong!=NULL) {
-    DivSongTimestamps& ts=curSubSong->ts;
+  DivSubSong* timedSubSong=curSubSong;
+  if (subSongIndex>=0 && subSongIndex<(int)song.subsong.size()) {
+    timedSubSong=song.subsong[subSongIndex];
+  } else {
+    subSongIndex=curSubSongIndex;
+  }
+  if (timedSubSong!=NULL) {
+    timedSubSong->calcTimestamps(song.chans,song.grooves,song.compatFlags.jumpTreatment,song.compatFlags.ignoreJumpAtEnd,song.compatFlags.brokenSpeedSel,song.compatFlags.delayBehavior);
+    DivSongTimestamps& ts=timedSubSong->ts;
+    printf("TIMING (sub-song %d)\n",subSongIndex);
     printf(
-      "TIMING\n"
       "- duration: %d.%06ds\n"
       "- ticks: %llu\n"
       "- rows: %d\n",

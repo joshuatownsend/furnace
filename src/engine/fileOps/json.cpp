@@ -1558,7 +1558,12 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
     for (int i=0; i<ds.systemLen; i++) {
       if (chips[i].contains("channels")) {
         int ch=chips[i]["channels"].get<int>();
-        if (ch<1 || ch>DIV_MAX_CHANS) throw std::out_of_range(fmt::sprintf("chip %d: channel count out of range",i));
+        const DivSysDef* def=sysDefs[ds.system[i]];
+        // no lower bound past 1: real songs go below minChans (e.g. 5-channel SegaPCM), and .fur allows it.
+        // channels above maxChans would never reach the chip, so reject those.
+        if (ch<1 || ch>def->maxChans || ch>DIV_MAX_CHANS) {
+          throw std::out_of_range(fmt::sprintf("chip %d (%s): channel count %d out of range (1-%d)",i,def->name,ch,def->maxChans));
+        }
         ds.systemChans[i]=ch;
       }
     }

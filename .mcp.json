@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "furnace": {
+      "command": "uv",
+      "args": ["run", "--project", "tools/furnace-mcp", "python", "tools/furnace-mcp/server.py"]
+    }
+  }
+}

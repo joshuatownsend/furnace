@@ -1125,12 +1125,13 @@ int main(int argc, char** argv) {
       return 1;
     }
   }
+  // changeSongP() ignores an invalid index, so check -subsong here for every command-line mode
+  if (!fileName.empty() && (consoleMode || benchMode || infoMode || outputMode) && subsong>=(int)e.song.subsong.size()) {
+    reportError(fmt::sprintf(_("sub-song %d does not exist (the song has %d)"),subsong,(int)e.song.subsong.size()));
+    finishLogFile();
+    return 1;
+  }
   if (infoMode) {
-    if (subsong>=(int)e.song.subsong.size()) {
-      reportError(fmt::sprintf(_("sub-song %d does not exist (the song has %d)"),subsong,(int)e.song.subsong.size()));
-      finishLogFile();
-      return 1;
-    }
     e.dumpSongInfo(subsong);
     finishLogFile();
     return 0;

@@ -2666,7 +2666,7 @@ void DivEngine::unmuteAll() {
   BUSY_END;
 }
 
-void DivEngine::dumpSongInfo() {
+void DivEngine::dumpSongInfo(int subSongIndex) {
   printf(
     "SONG INFORMATION\n"
     "- name: %s\n"
@@ -2684,6 +2684,38 @@ void DivEngine::dumpSongInfo() {
     song.sampleLen,
     song.notes.c_str()
   );
+
+  DivSubSong* timedSubSong=curSubSong;
+  if (subSongIndex>=0 && subSongIndex<(int)song.subsong.size()) {
+    timedSubSong=song.subsong[subSongIndex];
+  } else {
+    subSongIndex=curSubSongIndex;
+  }
+  if (timedSubSong!=NULL) {
+    timedSubSong->calcTimestamps(song.chans,song.grooves,song.compatFlags.jumpTreatment,song.compatFlags.ignoreJumpAtEnd,song.compatFlags.brokenSpeedSel,song.compatFlags.delayBehavior);
+    DivSongTimestamps& ts=timedSubSong->ts;
+    printf("TIMING (sub-song %d)\n",subSongIndex);
+    printf(
+      "- duration: %d.%06ds\n"
+      "- ticks: %llu\n"
+      "- rows: %d\n",
+      ts.totalTime.seconds,
+      ts.totalTime.micros,
+      (unsigned long long)ts.totalTicks,
+      ts.totalRows
+    );
+    if (ts.isLoopable) {
+      printf(
+        "- loop: order %d row %d to order %d row %d\n\n",
+        ts.loopStart.order,
+        ts.loopStart.row,
+        ts.loopEnd.order,
+        ts.loopEnd.row
+      );
+    } else {
+      printf("- loop: none\n\n");
+    }
+  }
 
   printf("SUB-SONGS\n");
   int index=0;

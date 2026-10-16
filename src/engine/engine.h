@@ -1820,7 +1820,8 @@ class DivEngine {
     unsigned char getExtValue();
 
     // dump song info to stdout
-    void dumpSongInfo();
+    // subSongIndex selects the sub-song to report timing for (-1: current one)
+    void dumpSongInfo(int subSongIndex=-1);
 
     // is playing
     bool isPlaying();

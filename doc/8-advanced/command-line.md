@@ -26,6 +26,8 @@ the following parameters may be used:
 - `-help`: display the following help.
 - `-console`: enable command-line interface (CLI) player.
   - see the COMMAND LINE INTERFACE section for more information
+- `-nostatus`: disable playback status in the CLI player.
+- `-nocontrols`: disable standard input controls in the CLI player.
 - `-loglevel <level>`: set the logging level to one of the following:
   - `error`: critical errors only
   - `warning`: errors and warnings
@@ -35,16 +37,19 @@ the following parameters may be used:
 
 - `-info`: get information about a song.
   - you must provide a file, otherwise Furnace will quit.
+  - this includes the song's duration, tick and row counts, and loop region.
+- `-noreport`: do not display a message box on error.
 
 - `-version`: display version information.
 - `-warranty`: view warranty disclaimer.
 
 **engine**
 
-- `-audio sdl|jack|portaudio`: override audio backend to one of the following:
+- `-audio sdl|jack|portaudio|pipe`: override audio backend to one of the following:
   - `sdl`: SDL (default)
   - `jack`: JACK Audio Connection Kit
   - `portaudio`: PortAudio
+  - `pipe`: write audio to standard output
 - `-view <type>`: set visualization of data to one of the following:
   - `pattern`: order and pattern
   - `commands`: engine commands
@@ -54,16 +59,25 @@ the following parameters may be used:
 - `-subsong <number>`: set sub-song to play.
 - `-safemode`: enable safe mode (software rendering without audio).
 - `-safeaudio`: enable safe mode (software rendering with audio).
-- `-benchmark render|seek`: run performance test and output total time.
+- `-benchmark render|seek|walk`: run performance test and output total time.
   - `render`: measure render time
   - `seek`: measure time to seek through the entire song
+  - `walk`: measure time to calculate song timestamps
   - you must provide a file, otherwise Furnace will quit.
 
 **audio export**
 
-- `-output path`: export audio in .wav format to `path`.
+- `-output path`: export audio to `path`.
   - you must provide a file, otherwise Furnace will quit.
+  - the format is chosen from the file extension (.wav, .opus, .flac, .mp3) unless `-outformat` is given.
+  - .ogg also selects Opus. use `-outformat vorbis` for Vorbis.
+- `-outformat u8|s16|f32|opus|flac|vorbis|mp3`: set audio export format.
+  - `u8`, `s16` and `f32` are .wav sample formats.
+- `-bitrate rate`: set bit rate (lossy formats only).
+- `-ratemode constant|variable|average`: set bit rate mode (MP3 only).
+- `-compression level`: set quality/compression level from 0 to 10 (Vorbis, FLAC and MP3 VBR only).
 - `-outmode one|persys|perchan`: set audio export output mode.
+  - this option has no short form.
   - `one`: single file (default)
   - `persys`: one file per chip (`_sXX` will be appended to file name, where `XX` is the chip number)
   - `perchan`: one file per channel (`_cXX` will be appended to file name, where `XX` is the channel number)
@@ -75,8 +89,25 @@ the following parameters may be used:
 - `-direct`: enable VGM export direct stream mode.
   - this mode is useful for DualPCM export.
   - note that this will increase file size by a huge amount!
+- `-vgmver 150|151|160|161|170|171|172`: set VGM version (`171` by default).
+- `-vgmhints`: add pattern hints to VGM output.
+- `-noloop`: do not loop VGM or S98 output.
+
+**S98 export**
+
+- `-s98out path`: output S98 data to `path`.
+  - you must provide a file, otherwise Furnace will quit.
+  - `-noloop` applies here too.
 
 **export (other)**
+
+- `-furout path`: save the song as an uncompressed .fur file to `path`.
+  - useful for converting imported modules (.mod, .xm, .dmf and others) to .fur.
+
+- `-jsonout path`: export song data as JSON to `path`.
+  - only available if Furnace was built with JSON support (on by default).
+  - compatibility flags are included.
+- `-jsonpretty`: indent JSON output.
 
 - `-cmdout path`: output command stream dump to `path`.
   - you must provide a file, otherwise Furnace will quit.

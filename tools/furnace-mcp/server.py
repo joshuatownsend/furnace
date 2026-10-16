@@ -162,7 +162,8 @@ def set_order(path: str, order: int, patterns: dict[str, int], subsong: int = 0)
 @_tool(_READ)
 def read_instrument(path: str, instrument: int) -> str:
     """One instrument as JSON (Furnace's JSON export format: type, fm params and
-    operators, macros, chip-specific blocks)."""
+    operators, macros, chip-specific blocks). 4-op FM "operators" are in register
+    order S1, S3, S2, S4; see write_instrument."""
     s = _load(_path(path))
     return json.dumps(fsong.instrument(s, instrument), indent=1)
 
@@ -171,7 +172,13 @@ def read_instrument(path: str, instrument: int) -> str:
 def write_instrument(path: str, instrument: int, changes: dict, replace: bool = False) -> str:
     """Change an instrument. changes is merged into the existing JSON (nested objects
     merge; "operators" merge per operator; other lists are replaced). replace=true
-    replaces it entirely. instrument == instrument count adds a new one. Saves the song."""
+    replaces it entirely. instrument == instrument count adds a new one. Saves the song.
+
+    FM operator order: on 4-op chips (OPN/OPM/OPZ, 4-op OPL) "operators" is in
+    register order S1, S3, S2, S4, not the algorithm order the GUI shows. So for
+    alg 4 (S1->S2, S3->S4) the carriers are operators[2] and operators[3], and
+    operators[0] modulates operators[2]. Check which ops are carriers before
+    touching tl: lower modulator tl = brighter, lower carrier tl = louder."""
     p = _path(path)
     s = _load(p)
     ins = fsong.update_instrument(s, instrument, changes, replace)

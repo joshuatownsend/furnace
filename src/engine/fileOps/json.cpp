@@ -1707,3 +1707,9 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
   }
   return true;
 }
+
+bool isJSONSong(const unsigned char* file, size_t len) {
+  JSON json=JSON::parse(file,file+len,nullptr,false);
+  if (json.is_discarded() || !json.is_object()) return false;
+  return json.contains("chips") || json.contains("subsongs");
+}

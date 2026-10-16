@@ -82,13 +82,16 @@ Commits (local, not pushed): `314ce8cd1` loader, `ee6ff36b2`, `02b1ef350`, `cb25
 5. **Partial JSON** (patches onto an open song) was not prototyped. Whole-song import is enough for Claude-driven editing, and 003 can decide whether patches are needed.
 6. **Hook**: content sniffing in `load()`. Exports with `exportCompatFlags` off still load, with a warning that playback may differ.
 
-### Follow-ups if built
-- The GUI "Open" dialog filters for song formats only; add `*.json` (untested in the GUI).
+### Finished after the spike
+- The GUI Open dialog's "compatible files" filter now includes `*.json`. The GUI opens files through the same `load()` path, though the dialog wasn't clicked through by hand.
+- Detection: a `.json` file always goes to the JSON loader, so errors are reported. Any other file starting with `{` goes there only if it parses as a JSON object with `chips` or `subsongs`; otherwise it falls through to the other loaders. Tested: a `.mod` starting with `{` falls through, and a JSON song saved as `.dat` still loads.
+- `doc/8-advanced/command-line.md` mentions that JSON exports can be opened again.
+
+### Follow-ups
 - BSON/CBOR input isn't handled (only text JSON).
 - For 003: a full song is 77–171 KB, mostly 256 pattern slots per channel and sample bytes. Claude will want a compact view (or patches) rather than whole-file edits.
 - The export changes add new keys (`masterVolume`, `channels`, `speedsFull`, …); older Furnace builds ignore them.
 - The fixes edit lines inside upstream's `saveJSON()`, not just new code, so they may conflict when syncing with upstream.
-- Content sniffing sends any file starting with `{` to the JSON loader, so a .mod whose title starts with `{` would fail instead of falling through to the MOD loader. Fix in the build phase: on a parse error, continue to the other loaders.
 
 ## Kickoff prompt
 

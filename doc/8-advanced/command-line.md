@@ -107,6 +107,7 @@ the following parameters may be used:
 - `-jsonout path`: export song data as JSON to `path`.
   - only available if Furnace was built with JSON support (on by default).
   - compatibility flags are included.
+  - Furnace can open these JSON files like any other song, so a song can be exported, edited as text and loaded back.
 - `-jsonpretty`: indent JSON output.
 
 - `-cmdout path`: output command stream dump to `path`.

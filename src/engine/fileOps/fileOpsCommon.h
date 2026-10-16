@@ -60,6 +60,11 @@ struct NotZlibException {
 
 #define DIV_FUR_MAGIC_DS0 "Furnace-B module"
 
+#ifdef WITH_JSON
+// whether the buffer parses as a JSON object that looks like a song (has "chips" or "subsongs").
+bool isJSONSong(const unsigned char* file, size_t len);
+#endif
+
 enum DivFurVariants: int {
   DIV_FUR_VARIANT_VANILLA=0,
   DIV_FUR_VARIANT_B=1,

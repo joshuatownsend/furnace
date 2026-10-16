@@ -1295,7 +1295,27 @@ int main(int argc, char** argv) {
       if (!writeOutputFile(e.saveFur(false),furOutName,_("could not write .fur!"))) outputFailed=true;
     }
     if (s98OutName!="") {
-      if (!writeOutputFile(e.saveS98(0.0f,NULL,vgmLoop,-1),s98OutName,_("could not write S98!"))) outputFailed=true;
+      // same chip selection as the GUI's S98 export: supported chips only, and
+      // like VGM, S98 can't hold the AY-3-8914 variant of the AY system.
+      bool s98Export[DIV_MAX_CHIPS];
+      bool hasOneAtLeast=false;
+      for (int i=0; i<DIV_MAX_CHIPS; i++) s98Export[i]=false;
+      for (int i=0; i<e.song.systemLen; i++) {
+        bool supported=e.supportedByS98(e.song.system[i]);
+        if (e.song.system[i]==DIV_SYSTEM_AY8910 && e.song.systemFlags[i].getInt("chipType",0)==3) supported=false;
+        if (supported) {
+          s98Export[i]=true;
+          hasOneAtLeast=true;
+        } else {
+          logW("S98: chip %d (%s) is not supported by the S98 format and will be skipped",i+1,e.getSystemName(e.song.system[i]));
+        }
+      }
+      if (!hasOneAtLeast) {
+        outputFailed=true;
+        reportError(_("no chip in this song can be exported to S98!"));
+      } else if (!writeOutputFile(e.saveS98(0.0f,s98Export,vgmLoop,-1),s98OutName,_("could not write S98!"))) {
+        outputFailed=true;
+      }
     }
 #ifdef WITH_JSON
     if (jsonOutName!="") {

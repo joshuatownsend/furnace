@@ -9,7 +9,7 @@ Fork goal (maintainer, 2026-10-15): **personal fork**. Upstream acceptance doesn
 
 | # | Idea | Verdict | Score | Lenses | Effort | Status | File |
 |---|------|---------|-------|--------|--------|--------|------|
-| 001 | Load songs from JSON | Advance | 8/10 | both | M | SELECTED (spike brief) | [001-json-song-import.md](001-json-song-import.md) |
+| 001 | Load songs from JSON | Advance | 8/10 | both | M | SPIKE DONE: build it (prototype on branch `json-import-spike`; 478/481 demos byte-identical, other 3 are OPZ non-determinism) | [001-json-song-import.md](001-json-song-import.md) |
 | 002 | CLI export parity (JSON/.fur/S98 out, VGM options, duration in `-info`) | Advance | 8/10 | both | M | DONE (built on branch `cli-export-parity`, 2026-10-15) | [002-cli-export-parity.md](002-cli-export-parity.md) |
 | 003 | Compose and tune instruments with Claude via an MCP server | Validate | 7/10 | both | M after 001+002 | SELECTED (spike brief) | [003-claude-mcp-server.md](003-claude-mcp-server.md) |
 | 004 | Headless "listen" report for rendered audio | Validate | 7/10 | both | M | SELECTED (spike brief) | [004-headless-listen-report.md](004-headless-listen-report.md) |

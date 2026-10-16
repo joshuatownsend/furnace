@@ -1020,6 +1020,7 @@ JSON serializeCompatFlags(DivCompatFlags* flags) {
   SET_FLAG(oldSampleOffset);
   SET_FLAG(oldCenterRate);
   SET_FLAG(noVolSlideReset);
+  SET_FLAG(arpSpeedGlobal);
 #undef SET_FLAG
   return json;
 }
@@ -1632,6 +1633,7 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       GET_FLAG(brokenPortaLegato); GET_FLAG(brokenFMOff); GET_FLAG(preNoteNoEffect); GET_FLAG(oldDPCM);
       GET_FLAG(resetArpPhaseOnNewNote); GET_FLAG(ceilVolumeScaling); GET_FLAG(oldAlwaysSetVolume);
       GET_FLAG(oldSampleOffset); GET_FLAG(oldCenterRate); GET_FLAG(noVolSlideReset);
+      GET_FLAG(arpSpeedGlobal);
 #undef GET_FLAG
     } else {
       addWarning("this JSON file has no compatibility flags. playback may differ from the original song.");

@@ -9,14 +9,14 @@ Fork goal (maintainer, 2026-10-15): **personal fork**. Upstream acceptance doesn
 
 | # | Idea | Verdict | Score | Lenses | Effort | Status | File |
 |---|------|---------|-------|--------|--------|--------|------|
-| 001 | Load songs from JSON | Advance | 8/10 | both | M | SPIKE DONE: build it (prototype on branch `json-import-spike`; 478/481 demos byte-identical, other 3 are OPZ non-determinism) | [001-json-song-import.md](001-json-song-import.md) |
-| 002 | CLI export parity (JSON/.fur/S98 out, VGM options, duration in `-info`) | Advance | 8/10 | both | M | DONE (built on branch `cli-export-parity`, 2026-10-15) | [002-cli-export-parity.md](002-cli-export-parity.md) |
+| 001 | Load songs from JSON | Advance | 8/10 | both | M | DONE (merged to master as #2, `9080b4906`, 2026-10-16; 479/481 demos byte-identical, other 2 are render variance, not JSON) | [001-json-song-import.md](001-json-song-import.md) |
+| 002 | CLI export parity (JSON/.fur/S98 out, VGM options, duration in `-info`) | Advance | 8/10 | both | M | DONE (merged to master as #1, `efc6e8019`, 2026-10-16) | [002-cli-export-parity.md](002-cli-export-parity.md) |
 | 003 | Compose and tune instruments with Claude via an MCP server | Validate | 7/10 | both | M after 001+002 | SELECTED (spike brief) | [003-claude-mcp-server.md](003-claude-mcp-server.md) |
 | 004 | Headless "listen" report for rendered audio | Validate | 7/10 | both | M | SELECTED (spike brief) | [004-headless-listen-report.md](004-headless-listen-report.md) |
 | 005 | Detect sample pitch automatically | Validate | 6/10 | inside-out | S–M | SELECTED (spike brief) | [005-sample-pitch-detect.md](005-sample-pitch-detect.md) |
 | 006 | Write new chip emulators with Claude (recipe + pilot chip) | Validate | 8/10 | both | M, then M–L per chip | SELECTED (spike brief) | [006-chip-emulators-with-claude.md](006-chip-emulators-with-claude.md) |
 
-Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent.
+Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001 and 002 are merged, so 003 is unblocked (its brief needs a refresh first: drift check fires on `main.cpp`/`json.cpp`, and JSON notes are Furnace numbering, middle C = 108).
 
 ## Parked ideas
 

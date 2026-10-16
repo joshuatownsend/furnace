@@ -19,6 +19,7 @@
 
 #include "fileOpsCommon.h"
 #include "nlohmann/json.hpp"
+#include "../platform/sound/sid3.h"
 
 using JSON = nlohmann::json;
 
@@ -703,6 +704,7 @@ JSON serializeInstrument(DivInstrument* ins) {
     SET_VALUE(n163,wave);
     SET_VALUE(n163,wavePos);
     SET_VALUE(n163,waveLen);
+    SET_VALUE(n163,waveMode);
     SET_VALUE(n163,perChanPos);
     JSON wavePosCh={}, waveLenCh={};
     for (int i=0; i<8; i++) {
@@ -1110,6 +1112,17 @@ template<typename T> static void jget(const JSON& j, const char* key, T& out) {
   out=it->get<T>();
 }
 
+// like jget(), but for numeric fields the engine uses as indices or divisors:
+// rejects values outside [lo,hi] instead of letting them narrow and wrap.
+template<typename T> static void jgetR(const JSON& j, const char* key, T& out, long long lo, long long hi) {
+  if (!j.is_object()) return;
+  auto it=j.find(key);
+  if (it==j.end() || it->is_null()) return;
+  long long v=it->get<long long>();
+  if (v<lo || v>hi) throw std::out_of_range(fmt::sprintf("%s is %lld, must be %lld-%lld",key,v,lo,hi));
+  out=(T)v;
+}
+
 static void deserializeMacro(const JSON& j, DivInstrumentMacro* m) {
   int len=j.at("length").get<int>();
   if (len<0 || len>255) throw std::out_of_range("macro length out of range");
@@ -1168,7 +1181,9 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
 #define GET_VALUE(v,x) jget(jv,#x,ins->v.x)
     if (j.contains("fm")) {
       const JSON& jv=j["fm"];
-      GET_VALUE(fm,alg); GET_VALUE(fm,fb); GET_VALUE(fm,fms); GET_VALUE(fm,ams);
+      // alg indexes output tables: [8] for OPN/OPM/OPZ, [4] for OPL
+      jgetR(jv,"alg",ins->fm.alg,0,7); GET_VALUE(fm,fb); GET_VALUE(fm,fms); GET_VALUE(fm,ams);
+      if ((ins->type==DIV_INS_OPL || ins->type==DIV_INS_OPL_DRUMS) && ins->fm.alg>3) throw std::out_of_range("alg must be 0-3 for OPL instruments");
       GET_VALUE(fm,fmsLFO); GET_VALUE(fm,amsLFO); GET_VALUE(fm,tremLFO); GET_VALUE(fm,ops); GET_VALUE(fm,opllPreset);
       GET_VALUE(fm,block); GET_VALUE(fm,fixedDrums); GET_VALUE(fm,kickFreq);
       GET_VALUE(fm,snareHatFreq); GET_VALUE(fm,tomTopFreq);
@@ -1238,11 +1253,11 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
     }
     if (j.contains("x1_010")) {
       const JSON& jv=j["x1_010"];
-      GET_VALUE(x1_010,bankSlot);
+      jgetR(jv,"bankSlot",ins->x1_010.bankSlot,0,7);
     }
     if (j.contains("n163")) {
       const JSON& jv=j["n163"];
-      GET_VALUE(n163,wave); GET_VALUE(n163,wavePos); GET_VALUE(n163,waveLen); GET_VALUE(n163,perChanPos);
+      GET_VALUE(n163,wave); GET_VALUE(n163,wavePos); GET_VALUE(n163,waveLen); GET_VALUE(n163,waveMode); GET_VALUE(n163,perChanPos);
       if (jv.contains("wavePosCh")) for (size_t i=0; i<jv["wavePosCh"].size() && i<8; i++) ins->n163.wavePosCh[i]=jv["wavePosCh"][i].get<int>();
       if (jv.contains("waveLenCh")) for (size_t i=0; i<jv["waveLenCh"].size() && i<8; i++) ins->n163.waveLenCh[i]=jv["waveLenCh"][i].get<int>();
     }
@@ -1317,16 +1332,17 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
       jget(we,"saw",ins->sid3.sawOn); jget(we,"tri",ins->sid3.triOn);
       if (we.contains("special") && we["special"].is_number()) {
         ins->sid3.specialWaveOn=true;
-        ins->sid3.special_wave=we["special"].get<int>();
+        jgetR(we,"special",ins->sid3.special_wave,0,SID3_NUM_SPECIAL_WAVES-1);
       } else {
         ins->sid3.specialWaveOn=false;
       }
       const JSON& env=jv.at("envelope");
       jget(env,"attack",ins->sid3.a); jget(env,"decay",ins->sid3.d); jget(env,"sustain",ins->sid3.s);
       jget(env,"susRate",ins->sid3.sr); jget(env,"release",ins->sid3.r);
-      jget(jv.at("phaseMod"),"enable",ins->sid3.phase_mod); jget(jv.at("phaseMod"),"source",ins->sid3.phase_mod_source);
-      jget(jv.at("ringMod"),"enable",ins->sid3.ringMod); jget(jv.at("ringMod"),"source",ins->sid3.ring_mod_source);
-      jget(jv.at("oscSync"),"enable",ins->sid3.oscSync); jget(jv.at("oscSync"),"source",ins->sid3.sync_source);
+      // sources index the chip's channels (7; ring mod also allows 7 = self)
+      jget(jv.at("phaseMod"),"enable",ins->sid3.phase_mod); jgetR(jv.at("phaseMod"),"source",ins->sid3.phase_mod_source,0,SID3_NUM_CHANNELS-1);
+      jget(jv.at("ringMod"),"enable",ins->sid3.ringMod); jgetR(jv.at("ringMod"),"source",ins->sid3.ring_mod_source,0,SID3_NUM_CHANNELS);
+      jget(jv.at("oscSync"),"enable",ins->sid3.oscSync); jgetR(jv.at("oscSync"),"source",ins->sid3.sync_source,0,SID3_NUM_CHANNELS-1);
       GET_VALUE(sid3,mixMode); GET_VALUE(sid3,duty); GET_VALUE(sid3,oneBitNoise); GET_VALUE(sid3,separateNoisePitch);
       GET_VALUE(sid3,doWavetable); GET_VALUE(sid3,resetDuty); GET_VALUE(sid3,dutyIsAbs);
       GET_VALUE(sid3,phaseInv); GET_VALUE(sid3,feedback);
@@ -1394,7 +1410,9 @@ static DivSample* deserializeSample(const JSON& j) {
     jget(j,"name",sample->name);
     jget(j,"centerRate",sample->centerRate);
     const JSON& loop=j.at("loop");
-    sample->depth=(DivSampleDepth)j.at("depth").get<int>();
+    int depth=j.at("depth").get<int>();
+    if (depth<0 || depth>=DIV_SAMPLE_DEPTH_MAX) throw std::out_of_range("invalid sample depth");
+    sample->depth=(DivSampleDepth)depth;
     jget(j,"brrEmphasis",sample->brrEmphasis);
     jget(j,"brrNoFilter",sample->brrNoFilter);
     jget(j,"dither",sample->dither);
@@ -1420,7 +1438,9 @@ static DivSample* deserializeSample(const JSON& j) {
     jget(loop,"start",sample->loopStart);
     jget(loop,"end",sample->loopEnd);
     jget(loop,"enabled",sample->loop);
-    sample->loopMode=(DivSampleLoopMode)loop.value("mode",0);
+    int loopMode=loop.value("mode",0);
+    if (loopMode<0 || loopMode>=DIV_SAMPLE_LOOP_MAX) throw std::out_of_range("invalid sample loop mode");
+    sample->loopMode=(DivSampleLoopMode)loopMode;
   } catch (...) {
     delete sample;
     throw;
@@ -1444,7 +1464,9 @@ static void deserializePattern(const JSON& j, DivPattern* pat, int patLen) {
       r[DIV_PAT_RAW2]=(freq>>16)&255;
       r[DIV_PAT_RAW3]=(freq>>24)&255;
     } else {
-      jget(row,"note",r[DIV_PAT_NOTE]);
+      // -1 (empty), 0-179 (C-5 to B-9), or note off/release/macro release
+      jgetR(row,"note",r[DIV_PAT_NOTE],-1,DIV_MACRO_REL);
+      if (r[DIV_PAT_NOTE]>179 && r[DIV_PAT_NOTE]<DIV_NOTE_NULL_PAT) throw std::out_of_range("invalid note value");
     }
     jget(row,"ins",r[DIV_PAT_INS]);
     jget(row,"vol",r[DIV_PAT_VOL]);
@@ -1478,6 +1500,7 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       jget(si,"author",ds.author);
       jget(si,"album",ds.category);
       jget(si,"tuning",ds.tuning);
+      if (!(ds.tuning>0.0f && ds.tuning<100000.0f)) throw std::out_of_range("tuning must be a positive number of Hz");
       jget(si,"masterVolume",ds.masterVol);
       jget(si,"comments",ds.notes);
       if (si.contains("system") && si["system"].is_array() && si["system"].size()==2) {
@@ -1511,6 +1534,8 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       const JSON& c=chips[i];
       int id=c.at("id").get<int>();
       if (id<=0 || id>=DIV_SYSTEM_MAX || sysDefs[id]==NULL) throw std::out_of_range(fmt::sprintf("chip %d: unknown chip ID %d",i,id));
+      // compound systems (e.g. "Sega Genesis") can't be installed as one chip; list their parts instead
+      if (sysDefs[id]->isCompound) throw std::out_of_range(fmt::sprintf("chip %d: ID %d (%s) is a compound system; list its component chips instead",i,id,sysDefs[id]->name));
       ds.system[i]=(DivSystem)id;
       jget(c,"volume",ds.systemVol[i]);
       jget(c,"panning",ds.systemPan[i]);
@@ -1518,6 +1543,15 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       ds.systemFlags[i].clear();
       if (c.contains("flags")) for (auto& f: c["flags"].items()) {
         ds.systemFlags[i].set(f.key(),f.value().get<String>());
+      }
+      // GBA MinMod reads these raw (divisors and array sizes); same limits as the chip config UI
+      if (ds.system[i]==DIV_SYSTEM_GBA_MINMOD) {
+        const DivConfig& fl=ds.systemFlags[i];
+        int sampRate=fl.getInt("sampRate",21845), mixBufs=fl.getInt("mixBufs",15);
+        int dacDepth=fl.getInt("dacDepth",9), chans=fl.getInt("channels",16);
+        if (sampRate<1 || sampRate>65536 || mixBufs<2 || mixBufs>16 || dacDepth<6 || dacDepth>9 || chans<1 || chans>16) {
+          throw std::out_of_range(fmt::sprintf("chip %d: GBA MinMod flags out of range",i));
+        }
       }
     }
     ds.initDefaultSystemChans();
@@ -1562,6 +1596,8 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
       jget(sj,"name",s->name);
       jget(sj,"notes",s->notes);
       jget(sj,"tickRate",s->hz);
+      // the editor allows 1-999; far above that the engine produces no audio per tick and stalls
+      if (!(s->hz>0.0f && s->hz<=1000.0f)) throw std::out_of_range("tick rate must be above 0 and at most 1000");
       if (sj.contains("speeds")) {
         const JSON& sp=sj["speeds"];
         s->speeds.len=0;
@@ -1573,8 +1609,11 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
         s->speeds.checkBounds();
       }
       if (sj.contains("virtualTempo")) {
-        s->virtualTempoN=sj["virtualTempo"].at(0).get<int>();
-        s->virtualTempoD=sj["virtualTempo"].at(1).get<int>();
+        int vtN=sj["virtualTempo"].at(0).get<int>();
+        int vtD=sj["virtualTempo"].at(1).get<int>();
+        if (vtN<1 || vtN>32767 || vtD<1 || vtD>32767) throw std::out_of_range("virtual tempo out of range (1-32767)");
+        s->virtualTempoN=vtN;
+        s->virtualTempoD=vtD;
       }
       if (sj.contains("highlights")) {
         s->hilightA=sj["highlights"].at(0).get<int>();

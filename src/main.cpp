@@ -767,20 +767,27 @@ void reportError(String what) {
 #endif
 
 // writes and frees the result of a save function. reports failMsg if w is NULL.
-void writeOutputFile(SafeWriter* w, const String& path, const String& failMsg) {
+// returns false on failure.
+bool writeOutputFile(SafeWriter* w, const String& path, const String& failMsg) {
   if (w==NULL) {
     reportError(failMsg);
-    return;
+    return false;
   }
+  bool ok=true;
   FILE* f=ps_fopen(path.c_str(),"wb");
   if (f!=NULL) {
-    fwrite(w->getFinalBuf(),1,w->size(),f);
+    if (fwrite(w->getFinalBuf(),1,w->size(),f)!=w->size()) {
+      reportError(fmt::sprintf(_("could not write file! (%s)"),strerror(errno)));
+      ok=false;
+    }
     fclose(f);
   } else {
     reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
+    ok=false;
   }
   w->finish();
   delete w;
+  return ok;
 }
 
 #ifndef _WIN32
@@ -1115,7 +1122,12 @@ int main(int argc, char** argv) {
     }
   }
   if (infoMode) {
-    e.dumpSongInfo();
+    if (subsong>=(int)e.song.subsong.size()) {
+      reportError(fmt::sprintf(_("sub-song %d does not exist (the song has %d)"),subsong,(int)e.song.subsong.size()));
+      finishLogFile();
+      return 1;
+    }
+    e.dumpSongInfo(subsong);
     finishLogFile();
     return 0;
   }
@@ -1149,6 +1161,7 @@ int main(int argc, char** argv) {
   }
 
   if (outputMode) {
+    bool outputFailed=false;
     if (cmdOutName!="") {
       SafeWriter* w=e.saveCommand(NULL);
       if (w!=NULL) {
@@ -1157,11 +1170,13 @@ int main(int argc, char** argv) {
           fwrite(w->getFinalBuf(),1,w->size(),f);
           fclose(f);
         } else {
+          outputFailed=true;
           reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
         }
         w->finish();
         delete w;
       } else {
+        outputFailed=true;
         reportError(_("could not write command stream!"));
       }
     }
@@ -1173,11 +1188,13 @@ int main(int argc, char** argv) {
           fwrite(w->getFinalBuf(),1,w->size(),f);
           fclose(f);
         } else {
+          outputFailed=true;
           reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
         }
         w->finish();
         delete w;
       } else {
+        outputFailed=true;
         reportError(_("could not write VGM!"));
       }
     }
@@ -1212,6 +1229,7 @@ int main(int argc, char** argv) {
       if (romTarget > DIV_ROM_ABSTRACT && romTarget < DIV_ROM_MAX) {
         DivROMExport* pendingExport = e.buildROM(romTarget);
         if (pendingExport==NULL) {
+          outputFailed=true;
           reportError(_("could not create exporter! you may want to report this issue..."));
         } else {
           pendingExport->setConf(romExportConfig);
@@ -1229,17 +1247,21 @@ int main(int argc, char** argv) {
                   fwrite(i.data->getFinalBuf(),1,i.data->size(),f);
                   fclose(f);
                 } else {
+                  outputFailed=true;
                   reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
                 }
               }
             } else {
+              outputFailed=true;
               reportError(fmt::sprintf(_("ROM export failed! (%s)"),e.getLastError()));
             }
           } else {
+            outputFailed=true;
             reportError(_("could not begin exporting process! TODO: elaborate"));
           }
         }
       } else {
+        outputFailed=true;
         reportError(_("no matching ROM export target is available."));
       }
     }
@@ -1252,27 +1274,29 @@ int main(int argc, char** argv) {
           fwrite(w->getFinalBuf(),1,w->size(),f);
           fclose(f);
         } else {
+          outputFailed=true;
           reportError(fmt::sprintf(_("could not open file! (%s)"),strerror(errno)));
         }
         w->finish();
         delete w;
       } else {
+        outputFailed=true;
         reportError(_("could not write text!"));
       }
     }
     if (furOutName!="") {
-      writeOutputFile(e.saveFur(false),furOutName,_("could not write .fur!"));
+      if (!writeOutputFile(e.saveFur(false),furOutName,_("could not write .fur!"))) outputFailed=true;
     }
     if (s98OutName!="") {
-      writeOutputFile(e.saveS98(0.0f,NULL,vgmLoop,-1),s98OutName,_("could not write S98!"));
+      if (!writeOutputFile(e.saveS98(0.0f,NULL,vgmLoop,-1),s98OutName,_("could not write S98!"))) outputFailed=true;
     }
 #ifdef WITH_JSON
     if (jsonOutName!="") {
-      writeOutputFile(e.saveJSON(&jsonExportOptions),jsonOutName,_("could not write JSON!"));
+      if (!writeOutputFile(e.saveJSON(&jsonExportOptions),jsonOutName,_("could not write JSON!"))) outputFailed=true;
     }
 #endif
     finishLogFile();
-    return 0;
+    return outputFailed?1:0;
   }
 
   if (consoleMode) {

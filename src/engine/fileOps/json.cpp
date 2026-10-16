@@ -464,6 +464,32 @@ JSON serializeInstrument(DivInstrument* ins) {
       break;
   }
 
+  // like putInsData2() for songs: also write any block that differs from the default,
+  // regardless of instrument type, so nothing the .fur would keep is lost.
+  {
+    DivInstrument defaultIns;
+    if (ins->fm!=defaultIns.fm) featureFM=true;
+    if (ins->c64!=defaultIns.c64) feature64=true;
+    if (ins->gb!=defaultIns.gb) featureGB=true;
+    if (ins->amiga!=defaultIns.amiga) {
+      featureSM=true;
+      featureNE=true;
+    }
+    if (ins->snes!=defaultIns.snes) featureSN=true;
+    if (ins->n163!=defaultIns.n163) featureN1=true;
+    if (ins->fds!=defaultIns.fds) featureFD=true;
+    if (ins->ws!=defaultIns.ws) featureWS=true;
+    if (ins->multipcm!=defaultIns.multipcm) featureMP=true;
+    if (ins->su!=defaultIns.su) featureSU=true;
+    if (ins->es5506!=defaultIns.es5506) featureES=true;
+    if (ins->x1_010!=defaultIns.x1_010) featureX1=true;
+    if (ins->esfm!=defaultIns.esfm) featureEF=true;
+    if (ins->powernoise!=defaultIns.powernoise) featurePN=true;
+    if (ins->sid2!=defaultIns.sid2) featureS2=true;
+    if (ins->sid3!=defaultIns.sid3) featureS3=true;
+    if (ins->klattsch!=defaultIns.klattsch) featureKT=true;
+  }
+
   if (ins->std.volMacro.len ||
       ins->std.arpMacro.len ||
       ins->std.dutyMacro.len ||
@@ -752,6 +778,7 @@ JSON serializeInstrument(DivInstrument* ins) {
     SET_VALUE(snes,useEnv);
     SET_VALUE(snes,sus);
     SET_VALUE(snes,gainMode);
+    SET_VALUE(snes,gain);
     SET_VALUE(snes,a);
     SET_VALUE(snes,d);
     SET_VALUE(snes,s);
@@ -1255,7 +1282,7 @@ static DivInstrument* deserializeInstrument(const JSON& j) {
     }
     if (j.contains("snes")) {
       const JSON& jv=j["snes"];
-      GET_VALUE(snes,useEnv); GET_VALUE(snes,sus); GET_VALUE(snes,gainMode); GET_VALUE(snes,a);
+      GET_VALUE(snes,useEnv); GET_VALUE(snes,sus); GET_VALUE(snes,gainMode); GET_VALUE(snes,gain); GET_VALUE(snes,a);
       GET_VALUE(snes,d); GET_VALUE(snes,s); GET_VALUE(snes,r); GET_VALUE(snes,d2);
     }
     if (j.contains("esfm")) {
@@ -1349,7 +1376,7 @@ static DivWavetable* deserializeWavetable(const JSON& j) {
   DivWavetable* wave=new DivWavetable;
   try {
     int len=j.at("len").get<int>();
-    if (len<1 || len>256) throw std::out_of_range("wavetable length out of range");
+    if (len<0 || len>256) throw std::out_of_range("wavetable length out of range");
     wave->len=len;
     wave->max=j.at("max").get<int>();
     const JSON& d=j.at("data");

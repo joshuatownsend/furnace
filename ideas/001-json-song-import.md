@@ -68,7 +68,8 @@ Commits (local, not pushed): `314ce8cd1` loader, `ee6ff36b2`, `02b1ef350`, `cb25
 
 ### Results
 - **All 481 demo songs** (`demos/*/*.fur`): rendered to WAV directly and via `-jsonout` → load JSON. 478 are byte-identical.
-- The other 3 are OPZ songs. Their re-saved .fur files are byte-identical to the originals, and rendering the *original* file four times gave two different WAVs. The OPZ emulator isn't repeatable run to run; this has nothing to do with JSON.
+- The other 3 are OPZ songs, and the cause is the OPZ emulator, not JSON. Their re-saved .fur files are byte-identical to the originals. Rendering the *original* "The bongos and teh base OPZx2" four times gave one odd result. Re-run one at a time, the other two match: four renders of `only_dream_opz` loaded from JSON all equal the original's audio. OPZ renders occasionally differ between runs of the same file. This is an upstream issue worth reporting separately.
+- **Hand-written JSON** (what Claude would produce): a file with only `chips: [{id: 4}]` and one subsong (`patternLength`, `orderLength`, four empty `channelData` entries, `orders`, a few note rows) loads and renders with sound. No instruments, songInfo or compat flags are needed. **Gotcha for 003:** notes use Furnace's numbering, not MIDI. Note 60 is C-0 and middle C (C-4) is 108.
 - **Malformed input**: 14 broken or hand-edited files (truncated, not JSON, unknown chip, wrong channel count, order out of range, huge pattern length, bad instrument type, over-long macro, short sample data, too many effect columns, wrong value types, empty object). Each is rejected with a readable error (e.g. `invalid JSON song: sub-song 0 has 6 channels but the chips have 7`), and nothing crashed. A pattern pointing at a missing instrument loads and plays, as .fur allows.
 - Load + render time is the same as .fur (under a second to load).
 
@@ -86,6 +87,8 @@ Commits (local, not pushed): `314ce8cd1` loader, `ee6ff36b2`, `02b1ef350`, `cb25
 - BSON/CBOR input isn't handled (only text JSON).
 - For 003: a full song is 77–171 KB, mostly 256 pattern slots per channel and sample bytes. Claude will want a compact view (or patches) rather than whole-file edits.
 - The export changes add new keys (`masterVolume`, `channels`, `speedsFull`, …); older Furnace builds ignore them.
+- The fixes edit lines inside upstream's `saveJSON()`, not just new code, so they may conflict when syncing with upstream.
+- Content sniffing sends any file starting with `{` to the JSON loader, so a .mod whose title starts with `{` would fail instead of falling through to the MOD loader. Fix in the build phase: on a parse error, continue to the other loaders.
 
 ## Kickoff prompt
 

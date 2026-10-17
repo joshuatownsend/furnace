@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat 5b9c00314..HEAD -- src/gui/tuner.cpp src/main.cpp`.
 
-- **Status**: BUILT as a pitch and envelope checker (retest 2 of 3, one hit coached; pitch fixed), in PR (branch `idea/004-listen-report`)
+- **Status**: DONE, merged as `e9e5b95bf` (PR #4). A pitch and envelope checker; tone is judged by ear.
 - **Verdict**: Validate
 - **Score**: 7/10 (see ideas/README.md)
 - **Lenses**: inside-out (Signal 4, data collected but not surfaced) / outside-in (interview)
@@ -138,3 +138,11 @@ Still open: harmonics are given relative to the fundamental. On patches with a w
 ```text
 Read C:\dev\furnace\furnace\ideas\004-headless-listen-report.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: test whether a text audio-analysis report lets Claude tell how a Furnace instrument edit changed the sound. Do not build beyond the spike; prototype work happens behind a flag or on a branch.
 ```
+
+## Follow-up after merge
+
+These were deferred from PR #4 at Josh's call and go into one follow-up PR:
+
+1. **Harmonics vs the strongest harmonic.** Report harmonics relative to the strongest one rather than the fundamental. A weak fundamental reads badly: EP's held spectrum shows `0 1.3 19.8 72 …`.
+2. **Anti-phase stereo** (Codex, round 4). With one side inverted, as on SNES, `mono = x.mean(axis=1)` cancels the note, so pitch and timbre get silence. Analyze the louder channel instead.
+3. **Silent-tail reference** (Codex, round 4). The resting level is taken from the last 50 ms, which is wrong if a release is still sounding there, or if a low PSG note has only one cycle in it. End the preview with a hard OFF and a guaranteed-silent stretch, and measure the resting level from that.

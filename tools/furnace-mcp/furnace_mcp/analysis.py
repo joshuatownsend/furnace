@@ -237,8 +237,13 @@ def analyze_note(path, note, note_off_s=None):
     """Listen report for one rendered note that starts at time 0: pitch against
     the note played, harmonics, brightness, envelope and loudness."""
     x, rate = read_wav(path)
-    mono = (x - x.mean(axis=0)).mean(axis=1)
-    off = note_off_s if note_off_s is not None else len(mono) / rate
+    off = note_off_s if note_off_s is not None else len(x) / rate
+    # Unipolar chips (SN76489, AY) idle at a nonzero level. Take the resting level
+    # from the silent tail, so silence stays zero; a whole-file mean would leave an
+    # offset after note-off that reads as sound. Windows remove their own mean below.
+    tail = x[-int(0.05 * rate):]
+    rest = np.median(tail, axis=0) if len(x) / rate - off >= 0.1 else x.mean(axis=0)
+    mono = (x - rest).mean(axis=1)
     res = {"note": note, "expected_hz": round(note_hz(note), 2)}
     env = envelope(mono, rate, off)
     if env is None:
@@ -252,6 +257,7 @@ def analyze_note(path, note, note_off_s=None):
     seg = mono[start:min(end, start + rate // 2)]
     if len(seg) < rate // 20:
         seg = mono[:end]
+    seg = seg - seg.mean() if len(seg) else seg
     f0 = _yin(seg[:rate // 5], rate) if len(seg) else None
     mag, binhz = _spectrum(seg, rate)
     if f0 is not None:
@@ -286,7 +292,7 @@ def analyze_note(path, note, note_off_s=None):
         # median, like sustain: a loud decay tail at the window's start mustn't count
         level = float(np.median(_frames_db(w, rate)[0])) - env["peak_dbfs"]
         # near the noise floor the "harmonics" are noise, and they read as a real tone
-        res["timbre"][k] = ({"too_quiet": True} if level < -QUIET_DB else _timbre(w, rate, f0))
+        res["timbre"][k] = ({"too_quiet": True} if level < -QUIET_DB else _timbre(w - w.mean(), rate, f0))
         res["timbre"][k]["level_db"] = round(level, 1)
     return res
 
@@ -305,6 +311,11 @@ def _timbre(seg, rate, f0):
     p = mag ** 2
     centroid = float((np.arange(len(mag)) * binhz * p).sum() / max(p.sum(), 1e-24) / f0)
     return {"harmonics_db": harm, "centroid_harmonic": round(centroid, 2)}
+
+
+def _below_peak(db):
+    # digital silence after a clean note-off reads as -150 dB or so
+    return "silent (over 80 dB below peak)" if db < -80 else f"{db} dB below peak"
 
 
 def format_note_report(r):
@@ -332,13 +343,13 @@ def format_note_report(r):
     else:
         rel = "didn't fall 40 dB before the end"
     lines.append(f"envelope: attack {env['attack_ms']} ms, decay {env['decay_ms']} ms, "
-                 f"sustain {env['sustain_db']} dB below peak, release {rel}")
+                 f"sustain {_below_peak(env['sustain_db'])}, release {rel}")
     lines.append(f"loudness: peak {env['peak_dbfs']} dBFS (5 ms RMS)"
                  + (f"; CLIPPING {r['clipped_samples']} samples" if r["clipped_samples"] else ""))
     labels = {"attack": "attack (first 100 ms)", "held": "held (last 300 ms before release)"}
     for k, t in (r.get("timbre") or {}).items():
         if t.get("too_quiet"):
-            lines.append(f"{labels[k]}: too quiet to measure tone ({t['level_db']} dB below peak)")
+            lines.append(f"{labels[k]}: too quiet to measure tone ({_below_peak(t['level_db'])})")
             continue
         lines.append(f"{labels[k]}: harmonics 1-8 in dB vs fundamental "
                      + " ".join(f"{v:g}" for v in t["harmonics_db"])

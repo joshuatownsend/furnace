@@ -436,11 +436,16 @@ PREVIEW_ROW_SECONDS = 0.1  # speed 6 at 60 Hz, virtual tempo 1:1
 
 
 def instrument_channel(song, index, sub_index=0):
-    """The channel that plays instrument index most often (None if it's unused)."""
+    """The channel that plays instrument index most often (None if it's unused).
+    Only patterns the order list plays count, once per time they're played:
+    songs keep stale patterns that would point at the wrong channel or chip."""
     sub = subsong(song, sub_index)
+    patterns = sub.get("patterns") or []
     counts = {}
-    for ch, pats in enumerate(sub.get("patterns") or []):
-        for pat in pats or []:
+    for ch, order in enumerate(sub.get("orders") or []):
+        pats = patterns[ch] if ch < len(patterns) else []
+        for o in range(sub.get("orderLength", len(order))):
+            pat = pats[order[o]] if order[o] < len(pats) else None
             for row in (pat or {}).get("rows") or []:
                 if row.get("ins") == index:
                     counts[ch] = counts.get(ch, 0) + 1

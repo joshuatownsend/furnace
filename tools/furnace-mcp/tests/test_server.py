@@ -200,6 +200,21 @@ def test_save_refuses_a_song_changed_since_it_was_read(demo):
     assert p.read_bytes() == Path(DEMO).read_bytes()
 
 
+def test_preview_channel_ignores_unplayed_patterns():
+    # channel 1 has a stale pattern full of the instrument that no order plays
+    def pat(n):
+        return {"rows": [{"ins": 5}] * n}
+    sub = {"orderLength": 2, "orders": [[0, 0], [1, 1]],
+           "patterns": [[pat(2)], [None, pat(1), pat(10)]]}
+    assert fsong.instrument_channel({"subsongs": [sub]}, 5) == 0
+
+
+async def test_preview_rejects_notes_outside_the_pitch_range(demo):
+    async with Client(mcp) as c:
+        res = await c.call_tool("preview_instrument", {"path": demo, "instrument": 12, "note": "C-8"})
+    assert res.is_error and "G#0 to B-7" in res.content[0].text
+
+
 def test_save_stages_next_to_the_song(demo, monkeypatch):
     # the final rename must not cross drives, so nothing is staged in the temp dir
     seen = []

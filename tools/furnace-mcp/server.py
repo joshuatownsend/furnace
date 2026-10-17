@@ -309,6 +309,9 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     p = _path(path)
     s = _load(p)
     n = notation.parse_note(note)
+    if not 25 <= analysis.note_hz(n) <= 4000:
+        raise ValueError(f"{note} is {analysis.note_hz(n):.1f} Hz; the listen report measures pitch "
+                         "between 25 Hz and 4 kHz, so pick a note from G#0 to B-7")
     if channel < 0:
         found = fsong.instrument_channel(s, instrument, subsong)
         if found is None:

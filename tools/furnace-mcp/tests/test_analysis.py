@@ -124,6 +124,18 @@ def test_near_silent_window_reports_no_tone(tmp_path):
     assert "too quiet to measure tone" in analysis.format_note_report(r)
 
 
+def test_unipolar_chip_tail_is_silent(tmp_path):
+    # a square wave between 0.1 and 0.4 (an SN76489 idles above zero), then back to
+    # the idle level at note-off: the tail must read as silence, not as sustain
+    on, total = int(0.8 * RATE), int(1.4 * RATE)
+    t = np.arange(total) / RATE
+    x = np.full(total, 0.1)
+    x[:on] += 0.3 * (np.sin(2 * np.pi * 440 * t[:on]) > 0)
+    r = analysis.analyze_note(write_wav(tmp_path / "a.wav", x), 117, note_off_s=0.8)
+    assert r["envelope"]["release_ms"] is not None and r["envelope"]["release_ms"] < 30
+    assert abs(r["pitch"]["cents"]) < 5
+
+
 def test_report_fits(tmp_path):
     wav = write_wav(tmp_path / "a.wav", 0.5 * tone(440.0, 1.0, (1.0, 0.5)))
     text = analysis.format_note_report(analysis.analyze_note(wav, 117, note_off_s=0.6))

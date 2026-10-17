@@ -428,3 +428,51 @@ def update_instrument(song, index, changes, replace=False):
         _merge(inst, changes)
     song.setdefault("songInfo", {})["instrumentCount"] = len(ins)
     return ins[index]
+
+
+# --- one-note previews (idea 004) -----------------------------------------
+
+PREVIEW_ROW_SECONDS = 0.1  # speed 6 at 60 Hz, virtual tempo 1:1
+
+
+def instrument_channel(song, index, sub_index=0):
+    """The channel that plays instrument index most often (None if it's unused)."""
+    sub = subsong(song, sub_index)
+    counts = {}
+    for ch, pats in enumerate(sub.get("patterns") or []):
+        for pat in pats or []:
+            for row in (pat or {}).get("rows") or []:
+                if row.get("ins") == index:
+                    counts[ch] = counts.get(ch, 0) + 1
+    return max(counts, key=counts.get) if counts else None
+
+
+def preview_song(song, index, note, channel, hold_rows=8, release_rows=8, volume=None, sub_index=0):
+    """A copy of the song that plays one note of instrument index on channel and
+    nothing else: note at row 0, note off after hold_rows, then release_rows of
+    silence. Timing is pinned so a row lasts exactly PREVIEW_ROW_SECONDS."""
+    instrument(song, index)
+    sub = subsong(song, sub_index)
+    nchans = len(sub.get("orders") or [])
+    if not 0 <= channel < nchans:
+        raise IndexError(f"channel {channel} out of range (0-{nchans - 1})")
+    if not 0 <= note <= 179:
+        raise ValueError(f"note {note} out of range (0-179)")
+    length = hold_rows + release_rows
+    if hold_rows < 1 or release_rows < 0 or length > 256:
+        raise ValueError("hold_rows must be at least 1, and hold + release at most 256 rows")
+    out = {k: copy.deepcopy(v) for k, v in song.items() if k != "subsongs"}
+    s = {k: copy.deepcopy(v) for k, v in sub.items() if k not in ("patterns", "orders")}
+    s.update(speeds=[6], tickRate=60.0, virtualTempo=[150, 150], patternLength=length,
+             orderLength=1, orders=[[0] for _ in range(nchans)],
+             patterns=[[] for _ in range(nchans)])
+    s.pop("grooves", None)
+    rows = [{} for _ in range(length)]
+    rows[0] = {"note": note, "ins": index}
+    if volume is not None:
+        rows[0]["vol"] = volume
+    if hold_rows < length:
+        rows[hold_rows] = {"note": 253}  # OFF
+    s["patterns"][channel] = [{"rows": rows}]
+    out["subsongs"] = [s]
+    return out, hold_rows * PREVIEW_ROW_SECONDS

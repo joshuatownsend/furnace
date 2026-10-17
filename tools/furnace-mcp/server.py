@@ -287,6 +287,40 @@ def render(order_start: int = 0, order_end: int | None = None,
     return "\n".join(lines)
 
 
+@_tool(_READ)
+def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
+                       hold_rows: int = 8, release_rows: int = 8, subsong: int = 0,
+                       path: str = "") -> str:
+    """Play one note of an instrument on its own and return a listen report: pitch
+    (Hz and cents from the note played), envelope (attack, decay, sustain, release),
+    peak loudness, the first 8 harmonics in dB relative to the fundamental, and
+    brightness (spectral centroid as a multiple of the fundamental). Use it to check
+    an instrument edit: preview before, write_instrument, preview again, compare.
+    The note is held for hold_rows (0.1 s each), then released for release_rows.
+    channel -1 picks the channel that uses the instrument most in the song (pass one
+    explicitly for an unused instrument; it must be a channel of the instrument's
+    chip). Doesn't change the song."""
+    p = _path(path)
+    s = _load(p)
+    n = notation.parse_note(note)
+    if channel < 0:
+        found = fsong.instrument_channel(s, instrument, subsong)
+        if found is None:
+            raise ValueError(f"instrument {instrument:02X} isn't used in the song; pass a channel "
+                             "that belongs to its chip (inspect_song lists the channels)")
+        channel = found
+    preview, off = fsong.preview_song(s, instrument, n, channel, hold_rows, release_rows,
+                                      sub_index=subsong)
+    tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
+    out = _render_dir() / f"{p.stem}_{tag}_ins{instrument:02X}_{note.replace('#', 's')}_c{channel}.wav"
+    (_, wav), = fsong.render(preview, out)
+    name = fsong.instrument(s, instrument).get("name", "")
+    label = fsong.channel_labels(s)[channel]
+    head = (f"instrument {instrument:02X} {name!r}, {note} on channel {channel} ({label}), "
+            f"held {off:g} s then released\nwav: {wav}")
+    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off))
+
+
 @_tool(_EDIT)
 def export(output: str, format: str = "", path: str = "") -> str:
     """Export the song. format: fur, json, vgm, s98, wav, txt (default: from the

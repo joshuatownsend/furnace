@@ -115,6 +115,38 @@ def render(song, wav_path, per_channel=False):
     return [(None, wav_path)]
 
 
+# --- the song open in Furnace -------------------------------------------
+
+def furnace_config_dir():
+    if os.name == "nt":
+        return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "furnace"
+    base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
+    return Path(base) / "furnace"
+
+
+def open_song():
+    """(path, has_unsaved_changes, reload_count) for the song open in the Furnace GUI.
+
+    The fork's GUI writes <config>/open-song.txt (path; 0/1 for unsaved changes;
+    how many times it reloaded the song after an outside change) and deletes it
+    on exit. Raises FurnaceError if nothing usable is open."""
+    f = furnace_config_dir() / "open-song.txt"
+    try:
+        lines = f.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        raise FurnaceError(
+            "Furnace isn't running (or is an older build without open-song sync). "
+            "Ask the user which song file to use.")
+    path = lines[0].strip() if lines else ""
+    modified = len(lines) > 1 and lines[1].strip() == "1"
+    reloads = int(lines[2]) if len(lines) > 2 and lines[2].strip().isdigit() else None
+    if not path:
+        raise FurnaceError(
+            "the song open in Furnace has never been saved, so it has no file yet. "
+            "Ask the user to save it (File > Save As) first.")
+    return Path(path), modified, reloads
+
+
 # --- song structure -------------------------------------------------------
 
 def subsong(song, index):

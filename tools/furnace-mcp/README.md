@@ -12,10 +12,20 @@ An MCP server that lets Claude read, edit, render and export Furnace songs. Fork
    uv run --project tools/furnace-mcp python tools/furnace-mcp/server.py
    ```
 
+## Working on the song open in Furnace
+
+The fork's Furnace (from this branch on) writes the path of the song it has open to `open-song.txt` in its config folder (`%APPDATA%urnace` on Windows), and reloads that file when it changes on disk. So:
+
+- Every tool's `path` is optional. Leave it out and the tools work on the song open in Furnace. `current_song` says which file that is.
+- After each edit, Furnace reloads the song and keeps your place. The tool result says "Furnace reloaded the song" once it has.
+- If you have unsaved changes in Furnace, edits are refused until you save. If you edit in Furnace after Claude's change arrives, Furnace asks before reloading.
+- A song that has never been saved has no file, so save it first.
+
 ## Tools
 
 | Tool | What it does |
 |---|---|
+| `current_song` | Which file Furnace has open, and whether it has unsaved changes |
 | `inspect_song` | Chips, numbered channels, orders, speed, duration, instruments, samples |
 | `read_patterns` | A window of orders × channels as tracker text (`C-4 0C 7F EC01`) |
 | `write_rows` | Overwrite rows of one channel's pattern from tracker text |

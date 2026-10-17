@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import tempfile
+import time
 from pathlib import Path
 
 from mcp.server import MCPServer
@@ -22,6 +23,10 @@ mcp = MCPServer(
     "furnace",
     instructions=(
         "Tools for Furnace chiptune tracker songs (.fur; also .json and anything Furnace imports). "
+        "Every tool takes an optional path. Leave it out to work on the song the user has open "
+        "in Furnace: when they say 'the song', 'this song', or name no file, that is the one they "
+        "mean, so edit it rather than starting a new file. Furnace reloads it after each edit. "
+        "Call current_song to see which file that is. "
         "Start with inspect_song, then read_patterns over a small window of orders. "
         "Patterns are shared: an order row points each channel at a pattern index, and editing "
         "a pattern changes every order that uses it. Render short order ranges to check edits. "
@@ -55,10 +60,25 @@ _backed_up = set()
 
 
 def _path(p):
-    path = Path(p).expanduser().resolve()
+    """The song file to work on: p, or the song open in Furnace when p is empty."""
+    path = fsong.open_song()[0] if not p else Path(p).expanduser()
+    path = path.resolve()
     if not path.is_file():
         raise FileNotFoundError(f"{path} does not exist")
     return path
+
+
+def _check_not_dirty(path):
+    """Refuse to overwrite a song Furnace has unsaved edits to: the GUI would
+    have to choose between its edits and ours."""
+    try:
+        open_path, modified, _ = fsong.open_song()
+    except fsong.FurnaceError:
+        return
+    if modified and open_path.resolve() == path:
+        raise ToolError(
+            "Furnace has unsaved changes to this song. Ask the user to save it in "
+            "Furnace (Ctrl+S) first, then retry.")
 
 
 def _load(path):
@@ -73,6 +93,7 @@ def _load(path):
 
 
 def _save(path, song):
+    _check_not_dirty(path)
     if path.suffix.lower() not in (".fur", ".json"):
         raise ValueError(f"can only save .fur or .json, not {path.suffix}; export a copy first")
     if str(path) not in _backed_up:
@@ -80,8 +101,30 @@ def _save(path, song):
         if not bak.exists():
             shutil.copyfile(path, bak)
         _backed_up.add(str(path))
+    before = _open_reloads(path)
     fsong.save(song, path)
-    _cache[str(path)] = (path.stat().st_mtime_ns, json.dumps(song))
+    # re-read on next use: Furnace may have changed the song on the way to disk
+    # (e.g. dropped unused patterns), and our view must match the file
+    _cache.pop(str(path), None)
+    if before is None:
+        return ""
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        time.sleep(0.2)
+        after = _open_reloads(path)
+        if after is not None and after > before:
+            return "\nFurnace reloaded the song; the change is on screen."
+    return ("\nFurnace didn't reload the song within 3 s. If it is showing a reload "
+            "question, the user should answer it; otherwise reopening the file shows the change.")
+
+
+def _open_reloads(path):
+    """Furnace's reload count if it has this file open, else None."""
+    try:
+        open_path, _, reloads = fsong.open_song()
+    except fsong.FurnaceError:
+        return None
+    return reloads if open_path.resolve() == path else None
 
 
 def _render_dir():
@@ -91,7 +134,15 @@ def _render_dir():
 
 
 @_tool(_READ)
-def inspect_song(path: str, subsong: int = 0) -> str:
+def current_song() -> str:
+    """Which song file is open in Furnace, and whether it has unsaved changes there."""
+    path, modified, _ = fsong.open_song()
+    state = "has unsaved changes in Furnace (ask the user to save before editing)" if modified else "saved"
+    return f"{path} ({state})"
+
+
+@_tool(_READ)
+def inspect_song(subsong: int = 0, path: str = "") -> str:
     """Summary of a song: name, chips, channels (with indices), sub-songs, orders,
     pattern length, speed, duration, instruments and samples."""
     p = _path(path)
@@ -121,8 +172,8 @@ def inspect_song(path: str, subsong: int = 0) -> str:
 
 
 @_tool(_READ)
-def read_patterns(path: str, order_start: int = 0, order_end: int | None = None,
-                  channels: str = "", subsong: int = 0, skip_empty: bool = True) -> str:
+def read_patterns(order_start: int = 0, order_end: int | None = None,
+                  channels: str = "", subsong: int = 0, skip_empty: bool = True, path: str = "") -> str:
     """Pattern rows for orders order_start..order_end (inclusive, default one order)
     as tracker text. channels: e.g. "0,2,5-7" (default all). Each order header lists
     the pattern index each channel plays. Rows empty in every shown channel are
@@ -132,35 +183,42 @@ def read_patterns(path: str, order_start: int = 0, order_end: int | None = None,
 
 
 @_tool(_EDIT)
-def write_rows(path: str, channel: int, pattern: int, rows: str, start_row: int = 0,
-               subsong: int = 0) -> str:
+def write_rows(channel: int, pattern: int, rows: str, start_row: int = 0,
+               subsong: int = 0, path: str = "") -> str:
     """Overwrite rows of one channel's pattern, starting at start_row. rows: one line per
     row in tracker text, e.g. "C-3 01 7F ...." or "..." for an empty row; a leading
-    "1F |" row number is ignored. Rows not given are left unchanged. Creates the pattern
-    if it doesn't exist. Saves the song."""
+    "1F |" row number is ignored. Rows not given are left unchanged. The pattern must
+    already be placed in an order on this channel (set_order); Furnace doesn't keep
+    unused patterns. Saves the song."""
     p = _path(path)
     s = _load(p)
     used = fsong.write_rows(s, subsong, channel, pattern, start_row, rows)
-    _save(p, s)
+    if not used:
+        # Furnace only saves patterns some order plays (unless the user turned on
+        # "save unused patterns"), so these rows would vanish on save.
+        raise ToolError(
+            f"no order plays pattern {pattern:02X} on channel {channel}, and Furnace drops "
+            "unused patterns when it saves. Place it with set_order first, then write its rows.")
+    note = _save(p, s)
     n = len(rows.strip("\n").split("\n"))
-    where = (", ".join(f"{o:02X}" for o in used)) if used else "no orders yet (use set_order)"
-    return f"wrote {n} rows to channel {channel} pattern {pattern:02X} from row {start_row:02X}; played at orders: {where}"
+    where = ", ".join(f"{o:02X}" for o in used)
+    return f"wrote {n} rows to channel {channel} pattern {pattern:02X} from row {start_row:02X}; played at orders: {where}" + note
 
 
 @_tool(_EDIT)
-def set_order(path: str, order: int, patterns: dict[str, int], subsong: int = 0) -> str:
+def set_order(order: int, patterns: dict[str, int], subsong: int = 0, path: str = "") -> str:
     """Point order row `order` at pattern indices, as {"channel": pattern}. Unlisted
     channels keep their pattern (0 on a new row). order == order count appends a row.
     Saves the song."""
     p = _path(path)
     s = _load(p)
     row = fsong.set_order(s, subsong, order, patterns)
-    _save(p, s)
-    return f"order {order:02X}: " + " ".join(f"{x:02X}" for x in row)
+    note = _save(p, s)
+    return f"order {order:02X}: " + " ".join(f"{x:02X}" for x in row) + note
 
 
 @_tool(_READ)
-def read_instrument(path: str, instrument: int) -> str:
+def read_instrument(instrument: int, path: str = "") -> str:
     """One instrument as JSON (Furnace's JSON export format: type, fm params and
     operators, macros, chip-specific blocks). 4-op FM "operators" are in register
     order S1, S3, S2, S4; see write_instrument."""
@@ -169,7 +227,7 @@ def read_instrument(path: str, instrument: int) -> str:
 
 
 @_tool(_EDIT)
-def write_instrument(path: str, instrument: int, changes: dict, replace: bool = False) -> str:
+def write_instrument(instrument: int, changes: dict, replace: bool = False, path: str = "") -> str:
     """Change an instrument. changes is merged into the existing JSON (nested objects
     merge; "operators" merge per operator; other lists are replaced). replace=true
     replaces it entirely. instrument == instrument count adds a new one. Saves the song.
@@ -182,13 +240,13 @@ def write_instrument(path: str, instrument: int, changes: dict, replace: bool = 
     p = _path(path)
     s = _load(p)
     ins = fsong.update_instrument(s, instrument, changes, replace)
-    _save(p, s)
-    return json.dumps(ins, indent=1)
+    note = _save(p, s)
+    return json.dumps(ins, indent=1) + note
 
 
 @_tool(_READ)
-def render(path: str, order_start: int = 0, order_end: int | None = None,
-           per_channel: bool = False, subsong: int = 0) -> str:
+def render(order_start: int = 0, order_end: int | None = None,
+           per_channel: bool = False, subsong: int = 0, path: str = "") -> str:
     """Render orders order_start..order_end (inclusive; default the whole song, which
     is slow for long songs) to WAV and return a listen report: loudness, clipping,
     silence, spectral centroid and band energy. per_channel adds one report per channel.
@@ -218,7 +276,7 @@ def render(path: str, order_start: int = 0, order_end: int | None = None,
 
 
 @_tool(_EDIT)
-def export(path: str, output: str, format: str = "") -> str:
+def export(output: str, format: str = "", path: str = "") -> str:
     """Export the song. format: fur, json, vgm, s98, wav, txt (default: from the
     output extension). Writes output; does not change the song."""
     p = _path(path)

@@ -775,6 +775,91 @@ void FurnaceGUI::updateWindowTitle() {
   }
 }
 
+// --- open-song sync (fork, ideas/003) ---
+// tools/furnace-mcp edits song files on disk. so that "the song I have open"
+// means something to it, the GUI writes the open file's path to
+// <config>/open-song.txt, and reloads the file when it changes on disk.
+
+// times the open song was reloaded after an outside change. published so the
+// MCP server can tell the user an edit is now on screen.
+static int openSongReloads=0;
+static int publishedReloads=0;
+
+static int64_t songFileStamp(const String& path) {
+#ifdef _WIN32
+  WIN32_FILE_ATTRIBUTE_DATA d;
+  if (!GetFileAttributesExW(utf8To16(path.c_str()).c_str(),GetFileExInfoStandard,&d)) return -1;
+  int64_t t=((int64_t)d.ftLastWriteTime.dwHighDateTime<<32)|d.ftLastWriteTime.dwLowDateTime;
+  int64_t size=((int64_t)d.nFileSizeHigh<<32)|d.nFileSizeLow;
+#else
+  struct stat st;
+  if (stat(path.c_str(),&st)!=0) return -1;
+#ifdef __APPLE__
+  int64_t t=(int64_t)st.st_mtimespec.tv_sec*1000000000+st.st_mtimespec.tv_nsec;
+#else
+  int64_t t=(int64_t)st.st_mtim.tv_sec*1000000000+st.st_mtim.tv_nsec;
+#endif
+  int64_t size=st.st_size;
+#endif
+  return t*31+size;
+}
+
+void FurnaceGUI::syncOpenSong() {
+  if (curFileName!=publishedFileName || modified!=publishedModified || openSongReloads!=publishedReloads) {
+    publishedFileName=curFileName;
+    publishedModified=modified;
+    publishedReloads=openSongReloads;
+    String p=e->getConfigPath()+DIR_SEPARATOR_STR+"open-song.txt";
+    FILE* f=ps_fopen(p.c_str(),"wb");
+    if (f!=NULL) {
+      fprintf(f,"%s\n%d\n%d\n",curFileName.c_str(),modified?1:0,openSongReloads);
+      fclose(f);
+    }
+  }
+
+  unsigned int now=SDL_GetTicks();
+  if (now-lastFileWatch<500) return;
+  lastFileWatch=now;
+  if (curFileName.empty() || curFileName.find(backupPath)==0) {
+    watchedFileName="";
+    return;
+  }
+  int64_t stamp=songFileStamp(curFileName);
+  if (curFileName!=watchedFileName) {
+    watchedFileName=curFileName;
+    watchedStamp=stamp;
+    return;
+  }
+  if (stamp==-1 || stamp==watchedStamp) return;
+  watchedStamp=stamp;
+  if (modified) {
+    showWarning(_("This song was changed on disk by another program.\nReload it? Your unsaved changes will be lost."),GUI_WARN_RELOAD);
+  } else {
+    reloadOpenSong();
+  }
+}
+
+void FurnaceGUI::reloadOpenSong() {
+  int ord=curOrder;
+  SelectionPoint cur=cursor;
+  if (load(curFileName)>0) {
+    showError(fmt::sprintf(_("Error while reloading file! (%s)"),lastError));
+    return;
+  }
+  // stay where the user was
+  if (ord<e->curSubSong->ordersLen) {
+    curOrder=ord;
+    e->setOrder(ord);
+    if (cur.y<e->curSubSong->patLen) {
+      cursor=cur;
+      selStart=cur;
+      selEnd=cur;
+    }
+  }
+  openSongReloads++;
+  logI("reloaded %s after it changed on disk",curFileName);
+}
+
 void FurnaceGUI::autoDetectSystemIter(std::vector<FurnaceGUISysDef>& category, bool& isMatch, std::map<DivSystem,int>& defCountMap, std::map<DivSystem,DivConfig>& defConfMap, std::map<DivSystem,int>& sysCountMap, std::map<DivSystem,DivConfig>& sysConfMap) {
   for (FurnaceGUISysDef& j: category) {
     if (!j.orig.empty()) {
@@ -2888,6 +2973,8 @@ int FurnaceGUI::save(String path, int dmfVersion) {
   curFileName=path;
   backupLock.unlock();
   modified=false;
+  // our own save isn't an outside change: re-baseline the file watch
+  watchedFileName="";
   updateWindowTitle();
   if (!e->getWarnings().empty()) {
     showWarning(e->getWarnings(),GUI_WARN_GENERIC);
@@ -2965,6 +3052,7 @@ int FurnaceGUI::load(String path) {
   curFileName=path;
   backupLock.unlock();
   modified=false;
+  watchedFileName="";
   curNibble=0;
   orderNibble=false;
   orderCursor=-1;
@@ -3487,6 +3575,14 @@ void FurnaceGUI::showWarning(String what, FurnaceGUIWarnings type) {
           wCancel,
         };
         break;
+    case GUI_WARN_RELOAD:
+      warnChoices={
+        {tYes,kYes,[this]{
+          reloadOpenSong();
+        }},
+        {tNo,kNo,[]{}},
+      };
+      break;
     case GUI_WARN_GENERIC:
       warnChoices={
         {tOk,kOk,[]{}},
@@ -7029,6 +7125,8 @@ bool FurnaceGUI::loop() {
       ImGui::OpenPopup(_("CmdStream Export Progress"));
     }
 
+    syncOpenSong();
+
     if (displayNew) {
       newSongQuery="";
       newSongFirstFrame=true;
@@ -9577,6 +9675,7 @@ void FurnaceGUI::commitState(DivConfig& conf) {
 }
 
 bool FurnaceGUI::finish(bool saveConfig) {
+  deleteFile((e->getConfigPath()+DIR_SEPARATOR_STR+"open-song.txt").c_str());
   if (!quitNoSave) {
     commitState(e->getConfObject());
     if (userPresetsOpen) {

@@ -43,7 +43,7 @@ def text(result):
 async def test_tools_listed():
     async with Client(mcp) as c:
         names = {t.name for t in (await c.list_tools()).tools}
-    assert names == {"inspect_song", "read_patterns", "write_rows", "set_order",
+    assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
                      "read_instrument", "write_instrument", "render", "export"}
 
 
@@ -56,10 +56,12 @@ async def test_inspect(demo):
 async def test_write_read_render(demo):
     async with Client(mcp) as c:
         rows = "A-4 0C 7F\n" + "...\n" * 62 + "OFF"
-        out = text(await c.call_tool("write_rows", {"path": demo, "channel": 0, "pattern": 0x40, "rows": rows}))
-        assert "no orders yet" in out
+        res = await c.call_tool("write_rows", {"path": demo, "channel": 0, "pattern": 0x40, "rows": rows})
+        assert res.is_error and "set_order first" in res.content[0].text
         silent = {str(ch): 0x41 for ch in range(13)}
         text(await c.call_tool("set_order", {"path": demo, "order": 0, "patterns": silent | {"0": 0x40}}))
+        out = text(await c.call_tool("write_rows", {"path": demo, "channel": 0, "pattern": 0x40, "rows": rows}))
+        assert "played at orders: 00" in out
         out = text(await c.call_tool("read_patterns", {"path": demo, "channels": "0"}))
         assert "00  | A-4 0C 7F" in out and "3F  | OFF" in out
         out = text(await c.call_tool("render", {"path": demo, "order_start": 0, "order_end": 0}))
@@ -90,3 +92,51 @@ async def test_append_order_and_export(demo, tmp_path):
         vgm = tmp_path / "out.vgm"
         text(await c.call_tool("export", {"path": demo, "output": str(vgm)}))
     assert vgm.stat().st_size > 1000
+
+
+@pytest.fixture
+def furnace_open(tmp_path, monkeypatch, demo):
+    """Pretend the Furnace GUI has `demo` open (what the fork's GUI publishes)."""
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    monkeypatch.setattr(fsong, "furnace_config_dir", lambda: cfg)
+
+    def set_state(path=demo, modified=False):
+        (cfg / "open-song.txt").write_text(f"{path}\n{int(modified)}\n", encoding="utf-8")
+    set_state()
+    return set_state
+
+
+async def test_path_defaults_to_open_song(demo, furnace_open):
+    async with Client(mcp) as c:
+        assert text(await c.call_tool("current_song", {})).startswith(str(Path(demo).resolve()))
+        text(await c.call_tool("set_order", {"order": 0, "patterns": {"0": 0x40}}))
+        text(await c.call_tool("write_rows", {"channel": 0, "pattern": 0x40, "rows": "C-4 0C 7F"}))
+        out = text(await c.call_tool("read_patterns", {"channels": "0", "order_start": 0}))
+    assert "pat 40" in out and "00  | C-4 0C 7F" in out
+    out_song = fsong.load(demo)
+    assert out_song["subsongs"][0]["patterns"][0][0x40]["rows"][0]["note"] == 108
+
+
+async def test_unsaved_changes_block_edits(demo, furnace_open):
+    furnace_open(modified=True)
+    async with Client(mcp) as c:
+        res = await c.call_tool("write_rows", {"channel": 0, "pattern": 1, "rows": "C-4 0C 7F"})
+        assert res.is_error and "unsaved changes" in res.content[0].text
+        # reading is still fine
+        text(await c.call_tool("inspect_song", {}))
+
+
+async def test_no_furnace_running(tmp_path, monkeypatch):
+    monkeypatch.setattr(fsong, "furnace_config_dir", lambda: tmp_path)
+    async with Client(mcp) as c:
+        res = await c.call_tool("inspect_song", {})
+    assert res.is_error and "Ask the user which song" in res.content[0].text
+
+
+async def test_unsaved_new_song(tmp_path, monkeypatch):
+    monkeypatch.setattr(fsong, "furnace_config_dir", lambda: tmp_path)
+    (tmp_path / "open-song.txt").write_text("\n1\n")
+    async with Client(mcp) as c:
+        res = await c.call_tool("current_song", {})
+    assert res.is_error and "never been saved" in res.content[0].text

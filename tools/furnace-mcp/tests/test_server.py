@@ -1,6 +1,7 @@
 """End-to-end tests through the MCP protocol (in-memory client) against the real
 furnace binary. Skipped when the binary isn't built."""
 
+import json
 import os
 import shutil
 import subprocess
@@ -197,15 +198,46 @@ async def test_backup_is_refreshed_each_session(demo, monkeypatch):
     assert bak.read_bytes() == Path(DEMO).read_bytes()
 
 
+def _same_stamp_rewrite(p, data):
+    """Replace p's contents keeping its size and modification time, like a
+    second save within one tick of a coarse-timestamp filesystem."""
+    st = p.stat()
+    assert len(data) == st.st_size
+    p.write_bytes(data)
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns))
+    assert p.stat().st_mtime_ns == st.st_mtime_ns
+
+
 def test_save_refuses_a_song_changed_since_it_was_read(demo):
     import server
     p = Path(demo).resolve()
     song = server._load(p)
-    st = p.stat()
-    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))  # "saved in Furnace"
+    data = bytearray(p.read_bytes())
+    data[-1] ^= 0xff  # "saved in Furnace", same size and time
+    _same_stamp_rewrite(p, bytes(data))
     with pytest.raises(server.ToolError, match="changed on disk"):
         server._save(p, song)
-    assert p.read_bytes() == Path(DEMO).read_bytes()
+    assert p.read_bytes() == bytes(data)
+
+
+def test_touch_alone_is_not_a_change(demo):
+    import server
+    p = Path(demo).resolve()
+    song = server._load(p)
+    st = p.stat()
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))
+    server._save(p, song)
+
+
+def test_load_sees_a_same_stamp_change(tmp_path):
+    import server
+    p = (tmp_path / "song.json").resolve()
+    song = fsong.load(DEMO)
+    song["songInfo"]["name"] = "AAAA"
+    p.write_text(json.dumps(song), encoding="utf-8")
+    assert server._load(p)["songInfo"]["name"] == "AAAA"
+    _same_stamp_rewrite(p, p.read_bytes().replace(b'"AAAA"', b'"BBBB"'))
+    assert server._load(p)["songInfo"]["name"] == "BBBB"
 
 
 def test_preview_channel_ignores_unplayed_patterns():

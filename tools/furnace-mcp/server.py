@@ -6,6 +6,7 @@ Edits are saved in place; the first edit to a file in a session copies it to
 """
 
 import functools
+import hashlib
 import json
 import os
 import shutil
@@ -266,7 +267,9 @@ def render(order_start: int = 0, order_end: int | None = None,
     sub = fsong.subsong(s, subsong)
     end = sub.get("orderLength", 1) - 1 if order_end is None else order_end
     ex = fsong.excerpt(s, subsong, order_start, end)
-    out = _render_dir() / f"{p.stem}_s{subsong}_o{order_start:02X}-{end:02X}.wav"
+    # the path hash keeps same-named songs in different folders apart
+    tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
+    out = _render_dir() / f"{p.stem}_{tag}_s{subsong}_o{order_start:02X}-{end:02X}.wav"
     (_, wav), = fsong.render(ex, out)
     lines = [f"wav: {wav}", analysis.format_report("mix", analysis.analyze(wav))]
     if per_channel:

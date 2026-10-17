@@ -84,7 +84,8 @@ The prototype is in `tools/furnace-mcp/` and registered for Claude Code in `.mcp
 - **FM operator order**: the JSON stores 4-op FM operators in register order (S1, S3, S2, S4). The first session hit this while tuning a trumpet patch, and it's now in the instrument tools' descriptions.
 - **Codex review hardening (PR #3, 2026-10-17)**: four review rounds tightened open-song sync. Each Furnace process now writes its own `<config>/open-song-<pid>.txt`, written atomically and only marked as published once written. The server ignores files from crashed processes and picks the window focused last. Recovery backups aren't offered for editing. Edits are refused if the file changed since it was read. The watch re-baselines right after Furnace saves, and reloads return to the sub-song you were on. On the server side: the macOS config dir and Unix build paths, saves staged next to the song, partial FM operator updates that keep the other operators, and a fresh `.bak` per session.
 - **Follow-up (not done)**: the GUI's file watch and the server's stale-read check both compare modification time (plus size, in the GUI). On filesystems with coarse timestamps (FAT/exFAT, some network shares), two saves within one timestamp tick that keep the same size can go unnoticed. A content hash or a change counter would close this.
-- **Still needs Josh (steps 1 and 5)**: open a copy of a song in Claude Code with this server, ask for a part ("add a bass line under order 00–03", "make the lead brighter"), open the result in Furnace and judge it.
+- **Josh's check (steps 1 and 5, 2026-10-17)**: done on the reviewed build. Josh is satisfied with the result.
+- ~~**Still needs Josh (steps 1 and 5)**~~: open a copy of a song in Claude Code with this server, ask for a part ("add a bass line under order 00–03", "make the lead brighter"), open the result in Furnace and judge it.
 
 ## Open questions
 

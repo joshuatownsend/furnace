@@ -172,9 +172,9 @@ def inspect_song(subsong: int = 0, path: str = "") -> str:
         f"highlights {sub.get('highlights')}",
         timing,
         "instruments: " + ", ".join(
-            f"{i:02X} {ins.get('name', '')!r} (type {ins.get('type')})" for i, ins in enumerate(s.get("instruments", []))),
+            f"{i:02X} {ins.get('name', '')!r} (type {ins.get('type')})" for i, ins in enumerate(s.get("instruments") or [])),
         "samples: " + ", ".join(
-            f"{i:02X} {smp.get('name', '')!r}" for i, smp in enumerate(s.get("samples", []))),
+            f"{i:02X} {smp.get('name', '')!r}" for i, smp in enumerate(s.get("samples") or [])),
         f"wavetables: {len(s.get('wavetables') or [])}",
     ]
     return "\n".join(l for l in lines if l)

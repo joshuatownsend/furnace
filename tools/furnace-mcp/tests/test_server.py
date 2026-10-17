@@ -57,6 +57,14 @@ async def test_inspect(demo):
     assert "YM2612" in out and "duration: 142.8" in out and "0C 'Slap'" in out
 
 
+async def test_inspect_song_without_samples():
+    # Furnace's JSON export writes "samples": null when a song has none
+    song = str(REPO / "tools" / "furnace-mcp" / "examples" / "neon_midway.fur")
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("inspect_song", {"path": song}))
+    assert "Bally Astrocade" in out and "06 'Open Hat'" in out
+
+
 async def test_write_read_render(demo):
     async with Client(mcp) as c:
         rows = "A-4 0C 7F\n" + "...\n" * 62 + "OFF"

@@ -5239,6 +5239,8 @@ bool FurnaceGUI::loop() {
     eventTimeEnd=SDL_GetPerformanceCounter();
 
     if (SDL_GetWindowFlags(sdlWin)&SDL_WINDOW_MINIMIZED) {
+      // keep following the file while minimized (furnace-mcp edits it from outside)
+      syncOpenSong();
       SDL_Delay(30);
       drawHalt=0;
       continue;

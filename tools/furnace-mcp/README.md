@@ -14,12 +14,16 @@ An MCP server that lets Claude read, edit, render and export Furnace songs. Fork
 
 ## Working on the song open in Furnace
 
-The fork's Furnace (from this branch on) writes the path of the song it has open to `open-song.txt` in its config folder (`%APPDATA%urnace` on Windows), and reloads that file when it changes on disk. So:
+The fork's Furnace (from this branch on) writes the path of the song it has open to `open-song.txt` in its config folder (`%APPDATA%\furnace` on Windows), and reloads that file when it changes on disk. So:
 
 - Every tool's `path` is optional. Leave it out and the tools work on the song open in Furnace. `current_song` says which file that is.
 - After each edit, Furnace reloads the song and keeps your place. The tool result says "Furnace reloaded the song" once it has.
 - If you have unsaved changes in Furnace, edits are refused until you save. If you edit in Furnace after Claude's change arrives, Furnace asks before reloading.
 - A song that has never been saved has no file, so save it first.
+
+## Example song
+
+`examples/victory_fanfare.fur` is a short Genesis (YM2612 + SN76489) fanfare made with these tools: a timpani roll, then three FM trumpets, bass trombone, DAC timpani and cymbals, and a PSG snare. It's the song to test with. Edits save in place, so copy it somewhere else before editing and keep the repo copy unchanged.
 
 ## Tools
 

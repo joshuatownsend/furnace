@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat 5b9c00314..HEAD -- src/gui/tuner.cpp src/main.cpp`.
 
-- **Status**: RESHAPED AND RETESTED (2 of 3, one hit coached), awaiting decision (branch `idea/004-listen-report`)
+- **Status**: BUILT as a pitch and envelope checker (retest 2 of 3, one hit coached; pitch fixed), in PR (branch `idea/004-listen-report`)
 - **Verdict**: Validate
 - **Score**: 7/10 (see ideas/README.md)
 - **Lenses**: inside-out (Signal 4, data collected but not surfaced) / outside-in (interview)
@@ -118,6 +118,14 @@ A re-run of the blind test after that fix would tell whether timbre can be promo
 - *Feedback 6 → 2 changed nothing measurable.* S1 sits at TL 37, so its feedback is inaudible. The report was correctly flat. This is a good sign for the metric, but it made the edit useless as a trial.
 
 **Next fork, if pitch should be trusted on any patch:** use the known note. Report tuning as the magnitude-weighted deviation of the strongest partials from the nearest integer multiple of the expected frequency, and flag "pitch uncertain" when the tracker lands nowhere near expected × 2^k. Retest on EP.
+
+## Pitch fix (2026-10-17)
+
+Josh chose to fix pitch, then open a PR. The pitch tracker's answer is kept when it lands within 50 cents of an octave of the note played; the octave hint for Slap, an octave low, still works. Otherwise the report says "tracker unsure". It then gives the tuning from the partials: the magnitude-weighted offset of the strong partials from the nearest multiple of half the note's frequency (half, so mult 0 still fits), plus the share of energy that sits on that series.
+
+On EP's decay edit, the report now reads "tracker unsure (found 345.53 Hz…); the partials sit −4.8 cents off the harmonic series of 261.63 Hz (100% of the energy is on it)". The −4.8 is real. The remaining carrier, S2, is at detune −3, while S4 (detune +3) dominated before the edit, at +0.7. Funk Gt, Slap and the other EP reports are unchanged. Tests cover the tuning from partials, with no energy at the fundamental, and an inharmonic tone.
+
+Still open: harmonics are given relative to the fundamental. On patches with a weak fundamental that reads badly (EP B held: `0 1.3 19.8 72 …`). Measuring against the strongest harmonic instead is a small follow-up.
 
 ## Decision criteria
 

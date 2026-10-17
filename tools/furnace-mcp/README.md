@@ -36,6 +36,7 @@ The fork's Furnace (from this branch on) writes the path of the song it has open
 | `set_order` | Point an order row at pattern indices, or append a row |
 | `read_instrument` / `write_instrument` | Instrument JSON; changes merge |
 | `render` | Render an order range to WAV and return a listen report (loudness, clipping, silence, spectral centroid, band energy; optionally per channel) |
+| `preview_instrument` | Play one note of an instrument on its own and report pitch (cents from the note played), envelope, loudness, and attack and held harmonics. Doesn't change the song |
 | `export` | fur, json, vgm, s98, wav, txt |
 
 Notes use Furnace numbering: C-4 is middle C, and lowercase `c_1` is octave −1. Edits save the song in place. The first edit in a session copies it to `<name>.bak.fur`, replacing any backup from an earlier session. Renders go to `%TEMP%/furnace-mcp` (or `FURNACE_MCP_RENDERS`).

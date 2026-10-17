@@ -197,6 +197,39 @@ def _peak_near(mag, binhz, hz, tol=0.03):
     return (i + (0.5 * (a - c) / den if den else 0.0)) * binhz, float(mag[i])
 
 
+def _tuning(mag, binhz, ref, top=5000.0):
+    """How far the partials sit from the harmonic series of the note played.
+
+    The grid is ref/2, so an operator at mult 0 (x0.5) still lands on it.
+    Returns (cents, fit): the magnitude-weighted offset of the strong partials
+    from their grid lines, and the share of energy below `top` that sits on the
+    grid. None if no partial is found."""
+    g = ref / 2
+    hi_bin = min(int(top / binhz), len(mag) - 1)
+    total = float((mag[1:hi_bin] ** 2).sum())
+    devs, weights, on_grid = [], [], 0.0
+    for k in range(1, int(top / g) + 1):
+        half = min(0.015 * k * g, g / 4) / binhz
+        lo, hi = max(int(k * g / binhz - half), 1), min(int(k * g / binhz + half) + 1, hi_bin)
+        if hi - lo < 3:
+            continue
+        on_grid += float((mag[lo:hi] ** 2).sum())
+        i = lo + int(np.argmax(mag[lo:hi]))
+        if i in (lo, hi - 1):
+            continue  # the slope of a neighbouring peak, not a partial
+        a, b, c = (np.log(mag[j] + 1e-12) for j in (i - 1, i, i + 1))
+        den = a - 2 * b + c
+        hz = (i + (0.5 * (a - c) / den if den else 0.0)) * binhz
+        devs.append(1200 * np.log2(hz / (k * g)))
+        weights.append(float(mag[i]))
+    if not weights:
+        return None
+    w = np.array(weights)
+    strong = w >= w.max() * 10 ** (-30 / 20)
+    cents = float(np.average(np.array(devs)[strong], weights=w[strong] ** 2))
+    return cents, on_grid / max(total, 1e-24)
+
+
 QUIET_DB = 40  # a window this far below the peak is too quiet to measure tone
 
 
@@ -220,14 +253,27 @@ def analyze_note(path, note, note_off_s=None):
     if len(seg) < rate // 20:
         seg = mono[:end]
     f0 = _yin(seg[:rate // 5], rate) if len(seg) else None
-    if f0 is None:
+    mag, binhz = _spectrum(seg, rate)
+    if f0 is not None:
+        refined, _ = _peak_near(mag, binhz, f0)
+        if refined:
+            f0 = refined
+    tuning = _tuning(mag, binhz, note_hz(note)) if len(seg) else None
+    cents = None if f0 is None else float(1200 * np.log2(f0 / note_hz(note)))
+    if cents is not None and abs(cents - 1200 * round(cents / 1200)) < 50:
+        res["pitch"] = {"hz": round(f0, 2), "cents": round(cents, 1)}
+    elif tuning and tuning[1] >= 0.6:
+        # the tracker found a period that isn't an octave of the note, but the
+        # partials sit on the note's harmonic series: sparse high partials (all
+        # carriers above mult 1) fool period trackers, not the ear
+        res["pitch"] = {"hz": None if f0 is None else round(f0, 2), "uncertain": True,
+                        "tuning_cents": round(tuning[0], 1), "on_grid": round(tuning[1], 2)}
+    elif f0 is not None:
+        res["pitch"] = {"hz": round(f0, 2), "cents": round(cents, 1)}
+    else:
         res["pitch"] = None
         return res
-    mag, binhz = _spectrum(seg, rate)
-    refined, _ = _peak_near(mag, binhz, f0)
-    if refined:
-        f0 = refined
-    res["pitch"] = {"hz": round(f0, 2), "cents": round(float(1200 * np.log2(f0 / note_hz(note))), 1)}
+    f0 = f0 if f0 is not None and not res["pitch"].get("uncertain") else note_hz(note)
     # timbre at two moments: FM modulators often decay fast, so the attack can
     # sound quite different from the held note
     onset = int(np.argmax(np.abs(mono) > np.abs(mono).max() * 0.01))
@@ -269,6 +315,11 @@ def format_note_report(r):
     p = r.get("pitch")
     if p is None:
         lines.append(f"pitch: no clear pitch (expected {r['expected_hz']} Hz)")
+    elif p.get("uncertain"):
+        found = f"found {p['hz']} Hz, not an octave of it" if p["hz"] else "no clear period"
+        lines.append(f"pitch: tracker unsure ({found}); the partials sit {p['tuning_cents']:+.1f} cents "
+                     f"off the harmonic series of {r['expected_hz']} Hz "
+                     f"({p['on_grid']:.0%} of the energy is on it)")
     else:
         c = p["cents"]
         octs = round(c / 1200)

@@ -57,6 +57,27 @@ def test_missing_fundamental_still_finds_the_pitch(tmp_path):
     assert abs(r["pitch"]["cents"]) < 2
 
 
+def test_tuning_from_partials():
+    # only partials 3 and 4, 5 cents flat: no energy at the fundamental itself
+    t = np.arange(RATE // 2) / RATE
+    f = 261.63 * 2 ** (-5 / 1200)
+    x = np.sin(2 * np.pi * 3 * f * t) + 0.5 * np.sin(2 * np.pi * 4 * f * t)
+    cents, fit = analysis._tuning(*analysis._spectrum(x, RATE), 261.63)
+    assert cents == pytest.approx(-5, abs=1) and fit > 0.9
+    # a partial halfway between grid lines is off the series
+    inharmonic = np.sin(2 * np.pi * 261.63 * 2.25 * t)
+    assert analysis._tuning(*analysis._spectrum(inharmonic, RATE), 261.63)[1] < 0.2
+
+
+def test_unsure_tracker_report():
+    r = {"note": 108, "expected_hz": 261.63, "clipped_samples": 0,
+         "envelope": {"peak_dbfs": -14.8, "attack_ms": 5, "decay_ms": 350, "sustain_db": -14.3,
+                      "release_ms": 760},
+         "pitch": {"hz": 345.53, "uncertain": True, "tuning_cents": -4.8, "on_grid": 1.0}}
+    line = analysis.format_note_report(r).splitlines()[0]
+    assert "tracker unsure" in line and "-4.8 cents" in line and "100%" in line
+
+
 def test_harmonics_relative_to_fundamental(tmp_path):
     wav = write_wav(tmp_path / "a.wav", 0.5 * tone(440.0, 1.0, (1.0, 0.5, 0.0, 0.1)))
     h = analysis.analyze_note(wav, 117)["timbre"]["held"]["harmonics_db"]

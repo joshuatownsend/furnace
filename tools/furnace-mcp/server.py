@@ -86,8 +86,10 @@ def _check_not_dirty(path):
 def _revision(path):
     """The file's contents, hashed. Modification times can't be trusted here:
     on coarse-timestamp filesystems (FAT/exFAT, some network shares) two saves
-    within one tick keep the same time."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    within one tick keep the same time. Streamed, since sample-heavy songs can
+    be large."""
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 def _load(path):

@@ -3,9 +3,10 @@
 Builds the song as Furnace JSON and converts it to neon_midway.fur next to
 this script with furnace -furout. Edit the sections below and rerun:
 
-    python neon_midway.py [path/to/furnace.exe]
+    python neon_midway.py [path/to/furnace]
 
-The default furnace.exe is build-gui/Release in this repo.
+The default is the furnace-mcp lookup: FURNACE_EXE, else build-gui or build
+in this repo.
 A = lead, B = offbeat arpeggio chords, C = octave bass, NO = drums.
 Speed 6 at 60 Hz: one row is a 16th note at 150 BPM; a pattern is 4 bars.
 """
@@ -14,6 +15,9 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from furnace_mcp.song import furnace_exe  # noqa: E402
 
 ROWS = 64
 NAMES = {"C": 0, "C#": 1, "D": 2, "D#": 3, "E": 4, "F": 5, "F#": 6, "G": 7, "G#": 8, "A": 9, "A#": 10, "B": 11}
@@ -184,7 +188,7 @@ def build():
 
 if __name__ == "__main__":
     here = Path(__file__).resolve().parent
-    furnace = Path(sys.argv[1]) if len(sys.argv) > 1 else here.parents[2] / "build-gui" / "Release" / "furnace.exe"
+    furnace = Path(sys.argv[1]) if len(sys.argv) > 1 else furnace_exe()
     out = here / "neon_midway.fur"
     with tempfile.TemporaryDirectory() as d:
         song = Path(d) / "neon_midway.json"

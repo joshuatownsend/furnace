@@ -1,0 +1,18 @@
+[project]
+name = "furnace-mcp"
+version = "0.1.0"
+description = "MCP server for composing and tuning Furnace songs with Claude (fork-only spike, ideas/003)"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=2.3,<3",
+    "numpy>=2.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

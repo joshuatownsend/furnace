@@ -267,7 +267,11 @@ TAParamResult pInfo(String val) {
   return TA_PARAM_SUCCESS;
 }
 
+// set by -loglevel. without it the GUI quiets the console (see below)
+bool logLevelSet=false;
+
 TAParamResult pLogLevel(String val) {
+  logLevelSet=true;
   if (val=="trace") {
     logLevel=LOGLEVEL_TRACE;
   } else if (val=="debug") {
@@ -1372,6 +1376,10 @@ int main(int argc, char** argv) {
   }
 
 #ifdef HAVE_GUI
+  // fork: trace logging every line to a console window (CONSOLE_SUBSYSTEM builds)
+  // makes loading a song take seconds, which stalls furnace-mcp's reloads.
+  // the log file and the log viewer still get everything.
+  if (!logLevelSet) logLevel=LOGLEVEL_INFO;
   if (safeMode) g.enableSafeMode();
   g.bindEngine(&e);
   if (!g.init()) {

@@ -41,6 +41,7 @@
 #include <zlib.h>
 #include <fmt/printf.h>
 #include <stdexcept>
+#include <chrono>
 #include "../engine/bsr.h"
 
 #ifdef _WIN32
@@ -773,6 +774,136 @@ void FurnaceGUI::updateWindowTitle() {
       if (checker==0x5ec4497d && checker1==0x6347ee) nonLatchNibble=true;
     }
   }
+}
+
+// --- open-song sync (fork, ideas/003) ---
+// tools/furnace-mcp edits song files on disk. so that "the song I have open"
+// means something to it, each GUI process writes the open file's path to
+// <config>/open-song-<pid>.txt, and reloads the file when it changes on disk.
+// with several Furnace processes open, the server picks the live one that was
+// focused last.
+
+// times the open song was reloaded after an outside change. published so the
+// MCP server can tell the user an edit is now on screen.
+static int openSongReloads=0;
+static int publishedReloads=0;
+// when this process's window last gained focus (ms since the Unix epoch)
+static long long openSongFocus=0;
+
+static long long wallClockMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+static String openSongStatePath(const String& configPath) {
+#ifdef _WIN32
+  unsigned long pid=GetCurrentProcessId();
+#else
+  unsigned long pid=getpid();
+#endif
+  return fmt::sprintf("%s%sopen-song-%lu.txt",configPath,DIR_SEPARATOR_STR,pid);
+}
+
+static int64_t songFileStamp(const String& path) {
+#ifdef _WIN32
+  WIN32_FILE_ATTRIBUTE_DATA d;
+  if (!GetFileAttributesExW(utf8To16(path.c_str()).c_str(),GetFileExInfoStandard,&d)) return -1;
+  int64_t t=((int64_t)d.ftLastWriteTime.dwHighDateTime<<32)|d.ftLastWriteTime.dwLowDateTime;
+  int64_t size=((int64_t)d.nFileSizeHigh<<32)|d.nFileSizeLow;
+#else
+  struct stat st;
+  if (stat(path.c_str(),&st)!=0) return -1;
+#ifdef __APPLE__
+  int64_t t=(int64_t)st.st_mtimespec.tv_sec*1000000000+st.st_mtimespec.tv_nsec;
+#else
+  int64_t t=(int64_t)st.st_mtim.tv_sec*1000000000+st.st_mtim.tv_nsec;
+#endif
+  int64_t size=st.st_size;
+#endif
+  return t*31+size;
+}
+
+void FurnaceGUI::syncOpenSong() {
+  if (curFileName!=publishedFileName || modified!=publishedModified || openSongReloads!=publishedReloads) {
+    // written to a temporary file and renamed, so a reader never sees a
+    // partial state. the reader ignores files whose process (named in the
+    // file name) is gone, i.e. left behind by a crash. a recovery backup is
+    // published without a path: it isn't watched, and the user should save it
+    // somewhere real first.
+    if (openSongFocus==0) openSongFocus=wallClockMs();
+    String p=openSongStatePath(e->getConfigPath());
+    String tmp=p+".tmp";
+    String name=(curFileName.find(backupPath)==0)?String():curFileName;
+    // the state only counts as published once the rename succeeded; on
+    // failure (e.g. a reader has the file open on Windows) retry shortly
+    static unsigned int publishRetryAt=0;
+    if ((int)(SDL_GetTicks()-publishRetryAt)>=0) {
+      bool ok=false;
+      FILE* f=ps_fopen(tmp.c_str(),"wb");
+      if (f!=NULL) {
+        bool written=fprintf(f,"%s\n%d\n%d\n%lld\n",name.c_str(),modified?1:0,openSongReloads,openSongFocus)>0;
+        written=(fclose(f)==0) && written;
+#ifdef _WIN32
+        ok=written && MoveFileExW(utf8To16(tmp.c_str()).c_str(),utf8To16(p.c_str()).c_str(),MOVEFILE_REPLACE_EXISTING);
+#else
+        ok=written && rename(tmp.c_str(),p.c_str())==0;
+#endif
+      }
+      if (ok) {
+        publishedFileName=curFileName;
+        publishedModified=modified;
+        publishedReloads=openSongReloads;
+      } else {
+        publishRetryAt=SDL_GetTicks()+100;
+      }
+    }
+  }
+
+  unsigned int now=SDL_GetTicks();
+  if (now-lastFileWatch<500) return;
+  lastFileWatch=now;
+  if (curFileName.empty() || curFileName.find(backupPath)==0) {
+    watchedFileName="";
+    return;
+  }
+  int64_t stamp=songFileStamp(curFileName);
+  if (curFileName!=watchedFileName) {
+    watchedFileName=curFileName;
+    watchedStamp=stamp;
+    return;
+  }
+  if (stamp==-1 || stamp==watchedStamp) return;
+  watchedStamp=stamp;
+  if (modified) {
+    showWarning(_("This song was changed on disk by another program.\nReload it? Your unsaved changes will be lost."),GUI_WARN_RELOAD);
+  } else {
+    reloadOpenSong();
+  }
+}
+
+void FurnaceGUI::reloadOpenSong() {
+  size_t sub=e->getCurrentSubSong();
+  int ord=curOrder;
+  SelectionPoint cur=cursor;
+  if (load(curFileName)>0) {
+    showError(fmt::sprintf(_("Error while reloading file! (%s)"),lastError));
+    return;
+  }
+  // stay where the user was
+  if (sub<e->song.subsong.size()) {
+    e->changeSongP(sub);
+    recalcTimestamps=true;
+  }
+  if (ord<e->curSubSong->ordersLen) {
+    curOrder=ord;
+    e->setOrder(ord);
+    if (cur.y<e->curSubSong->patLen) {
+      cursor=cur;
+      selStart=cur;
+      selEnd=cur;
+    }
+  }
+  openSongReloads++;
+  logI("reloaded %s after it changed on disk",curFileName);
 }
 
 void FurnaceGUI::autoDetectSystemIter(std::vector<FurnaceGUISysDef>& category, bool& isMatch, std::map<DivSystem,int>& defCountMap, std::map<DivSystem,DivConfig>& defConfMap, std::map<DivSystem,int>& sysCountMap, std::map<DivSystem,DivConfig>& sysConfMap) {
@@ -2888,6 +3019,10 @@ int FurnaceGUI::save(String path, int dmfVersion) {
   curFileName=path;
   backupLock.unlock();
   modified=false;
+  // our own save isn't an outside change: re-baseline the file watch now, so
+  // an outside change right after this save is still noticed
+  watchedFileName=curFileName;
+  watchedStamp=songFileStamp(curFileName);
   updateWindowTitle();
   if (!e->getWarnings().empty()) {
     showWarning(e->getWarnings(),GUI_WARN_GENERIC);
@@ -2965,6 +3100,8 @@ int FurnaceGUI::load(String path) {
   curFileName=path;
   backupLock.unlock();
   modified=false;
+  watchedFileName=curFileName;
+  watchedStamp=songFileStamp(curFileName);
   curNibble=0;
   orderNibble=false;
   orderCursor=-1;
@@ -3487,6 +3624,14 @@ void FurnaceGUI::showWarning(String what, FurnaceGUIWarnings type) {
           wCancel,
         };
         break;
+    case GUI_WARN_RELOAD:
+      warnChoices={
+        {tYes,kYes,[this]{
+          reloadOpenSong();
+        }},
+        {tNo,kNo,[]{}},
+      };
+      break;
     case GUI_WARN_GENERIC:
       warnChoices={
         {tOk,kOk,[]{}},
@@ -4772,6 +4917,12 @@ bool FurnaceGUI::loop() {
               updateWindow=true;
               logV("window restored");
               break;
+            case SDL_WINDOWEVENT_FOCUS_GAINED:
+              // with several Furnace windows open, the last focused one is
+              // "the open song" for tools/furnace-mcp
+              openSongFocus=wallClockMs();
+              publishedFileName="\x01";
+              break;
             case SDL_WINDOWEVENT_SHOWN:
               logV("window shown");
               break;
@@ -5143,6 +5294,8 @@ bool FurnaceGUI::loop() {
     eventTimeEnd=SDL_GetPerformanceCounter();
 
     if (SDL_GetWindowFlags(sdlWin)&SDL_WINDOW_MINIMIZED) {
+      // keep following the file while minimized (furnace-mcp edits it from outside)
+      syncOpenSong();
       SDL_Delay(30);
       drawHalt=0;
       continue;
@@ -7028,6 +7181,8 @@ bool FurnaceGUI::loop() {
       displayExportingCS=false;
       ImGui::OpenPopup(_("CmdStream Export Progress"));
     }
+
+    syncOpenSong();
 
     if (displayNew) {
       newSongQuery="";
@@ -9577,6 +9732,7 @@ void FurnaceGUI::commitState(DivConfig& conf) {
 }
 
 bool FurnaceGUI::finish(bool saveConfig) {
+  deleteFile(openSongStatePath(e->getConfigPath()).c_str());
   if (!quitNoSave) {
     commitState(e->getConfObject());
     if (userPresetsOpen) {

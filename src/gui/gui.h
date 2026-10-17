@@ -755,6 +755,7 @@ enum FurnaceGUIWarnings {
   GUI_WARN_IMPORT,
   GUI_WARN_NPR,
   GUI_WARN_QUIT_SETTINGS,
+  GUI_WARN_RELOAD,
   GUI_WARN_GENERIC
 };
 
@@ -1828,6 +1829,14 @@ class FurnaceGUI {
   std::vector<String> availAudioDrivers;
 
   bool quit, warnQuit, willCommit, edit, editClone, isPatUnique, modified, displayError, displayExporting, vgmExportLoop, vgmExportPatternHints, vgmExportDPCM07;
+
+  // open-song sync (fork, ideas/003): tells tools/furnace-mcp which file is open
+  // and reloads it when something else changes it on disk.
+  String publishedFileName="";
+  bool publishedModified=false;
+  String watchedFileName;
+  int64_t watchedStamp=-1;
+  unsigned int lastFileWatch=0;
   bool vgmExportDirectStream, displayInsTypeList, displayWaveSizeList;
   bool portrait, injectBackUp, mobileMenuOpen, warnColorPushed;
   bool wantCaptureKeyboard, oldWantCaptureKeyboard, displayMacroMenu;
@@ -3174,6 +3183,8 @@ class FurnaceGUI {
   void pianoLabel(ImDrawList* dl, ImVec2& p0, ImVec2& p1, int note);
 
   void updateWindowTitle();
+  void syncOpenSong();
+  void reloadOpenSong();
   void updateROMExportAvail();
   void autoDetectSystem();
   void autoDetectSystemIter(std::vector<FurnaceGUISysDef>& category, bool& isMatch, std::map<DivSystem,int>& defCountMap, std::map<DivSystem,DivConfig>& defConfMap, std::map<DivSystem,int>& sysCountMap, std::map<DivSystem,DivConfig>& sysConfMap);

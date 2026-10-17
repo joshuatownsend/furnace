@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat 5b9c00314..HEAD -- src/gui/tuner.cpp src/main.cpp`.
 
-- **Status**: IN PROGRESS (branch `idea/004-listen-report`, brief refreshed 2026-10-17 at `40684545c`)
+- **Status**: SPIKE DONE, verdict reshape, awaiting decision (branch `idea/004-listen-report`)
 - **Verdict**: Validate
 - **Score**: 7/10 (see ideas/README.md)
 - **Lenses**: inside-out (Signal 4, data collected but not surfaced) / outside-in (interview)
@@ -58,6 +58,47 @@ Render a short passage (a note, an instrument preview, or a range of rows) and r
 2. **Write a script** that prints pitch, cents offset, centroid, the top 8 harmonics, ADSR estimates and peak/RMS. *You'll know when* the report fits in about 15 lines.
 3. **Make three known edits** (raise an operator's multiplier, shorten the decay, raise feedback) and render each. *You'll know when* you can see whether the report changes in the expected direction for each edit.
 4. **Blind test**: give Claude the before and after reports and ask which edit was made. *You'll know when* you have a hit rate out of 3.
+
+## Spike results (2026-10-17)
+
+**Setup.** Funk Gt (instrument 0D of *All Good Times*: algorithm 3, feedback 4, channel 6) at C-4 through the new `preview_instrument` tool, plus three edits:
+
+- A: S2's multiplier, 2 → 5
+- B: the carrier S4's decay rate, 13 → 20
+- C: feedback, 4 → 7
+
+**Did the reports move?** Yes. Every edit changed the report, but not always where theory says it would.
+
+| | pitch | sustain | attack harmonics / brightness | held harmonics / brightness |
+|---|---|---|---|---|
+| before | +2.0 c | −25.8 dB | 0 3.2 −5.1 −5.2 … / 13.0x | 0 −4.1 4.3 −2 … / 6.14x |
+| A (mult) | +2 c | ~same | h2 falls to −7.5 / 11.4x | changed |
+| B (decay) | +2.2 c | **−50.3 dB** | similar / 18.0x | flat 0 −0.2 −0.6 … / 9.9x |
+| C (fb) | +2 c | ~same | h8 up to −1.1 / **9.7x (darker)** | changed |
+
+The first version of the report missed A and C completely. Their changes sit in the first 100 ms, so the timbre is now split into an attack window and a held window. Pitch did not move with any edit, as expected. Pitch was also within 1 cent on synthetic tones, including one with a missing fundamental (`tests/test_analysis.py`).
+
+**Blind test: 1 of 3.** Each trial used a fresh agent that saw only the before report, one after report and the three candidate edits.
+
+- **Trial 1 (true answer C, feedback): picked A.** Wrong. The agent reasoned that more feedback means brighter, but the measured attack got darker. The report was accurate; the agent's FM intuition was wrong for this patch.
+- **Trial 2 (true answer A, multiplier): picked A.** Right, with medium confidence.
+- **Trial 3 (true answer B, decay): picked C.** Wrong. The report was at fault. After the edit the held part is 50 dB down, nearly silent, so its "harmonics" are measuring the noise floor. They came out as a smooth flat slope, which the agent read as noise from heavy feedback. It did note the sustain drop, but trusted the bogus timbre more.
+
+**Answers to the open questions.**
+
+1. *Which metrics help?* Pitch in cents and the envelope (especially sustain level) are reliable and easy to read. Harmonics and brightness do move, but they need the attack/held split, and they are misleading when a window is near silent.
+2. *Can Claude predict how an FM change moves the metrics?* Not reliably from intuition alone. In trial 1, "feedback brightens" was wrong for this patch. Converging over iterations would have to rely on measuring each step, not on predicting it.
+3. Answered in the refresh.
+4. *Is pitch good enough to catch detuned samples?* On synthetic tones and FM, yes: within 1 cent and stable across edits. Real samples (idea 005) were not tested.
+
+**Verdict: reshape.** At 1 of 3, this misses the build bar of 2 of 3. Pitch and envelope did their job: both edits that turned on them showed up clearly in the report. Timbre is the weak part. One failure was a fixable report bug and the other a reasoning error, which matches the "reshape" criterion.
+
+The reshaped tool:
+- keeps `preview_instrument` for pitch and envelope;
+- has the report drop the timbre line for any window more than about 40 dB below peak, saying "too quiet to measure" instead;
+- frames harmonics and brightness as "what changed", for Josh to confirm by ear, rather than as a verdict.
+
+A re-run of the blind test after that fix would tell whether timbre can be promoted. This spike can't claim that result in hindsight.
 
 ## Decision criteria
 

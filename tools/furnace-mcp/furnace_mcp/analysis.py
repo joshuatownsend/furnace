@@ -239,19 +239,24 @@ def _tuning(mag, binhz, ref, top=5000.0):
 QUIET_DB = 40  # a window this far below the peak is too quiet to measure tone
 
 
-def analyze_note(path, note, note_off_s=None, a4=440.0):
-    """Listen report for one rendered note that starts at time 0: pitch against
-    the note played, harmonics, brightness, envelope and loudness."""
+def analyze_note(path, note, note_off_s=None, a4=440.0, note_on_s=0.0):
+    """Listen report for one rendered note that starts at note_on_s (times are from
+    the start of the file): pitch against the note played, harmonics, brightness,
+    envelope and loudness. Silence before the note is the level reference."""
     x, rate = read_wav(path)
-    off = note_off_s if note_off_s is not None else len(x) / rate
-    # Unipolar chips (SN76489, AY) idle at a nonzero level. Take the resting level
-    # from the silent tail, so silence stays zero; a whole-file mean would leave an
-    # offset after note-off that reads as sound. Windows remove their own mean below.
-    tail = x[-int(0.05 * rate):]
-    rest = np.median(tail, axis=0) if len(x) / rate - off >= 0.1 else x.mean(axis=0)
     clipped = int(np.count_nonzero(np.abs(x) >= 0.999))
-    x = x - rest
-    mono = x.mean(axis=1)
+    start = int(note_on_s * rate)
+    # A chip whose output isn't DC-filtered idles at a nonzero level. The last
+    # 0.1 s before the note gives that level (earlier, Furnace's DC filter is still
+    # settling), so silence reads as zero even when a release is still sounding
+    # at the end. Windows remove their own mean below.
+    ref = x[max(0, start - rate // 10):start]
+    rest = np.median(ref, axis=0) if len(ref) >= rate // 50 else x.mean(axis=0)
+    x = x[start:] - rest
+    off = note_off_s - note_on_s if note_off_s is not None else len(x) / rate
+    # the louder channel, not the mean: a chip that inverts one side (SNES) would
+    # cancel to silence
+    mono = x[:, int(np.argmax((x ** 2).sum(axis=0)))]
     hz = note_hz(note, a4)
     res = {"note": note, "expected_hz": round(hz, 2)}
     env = envelope(x, rate, off)
@@ -307,16 +312,14 @@ def analyze_note(path, note, note_off_s=None, a4=440.0):
 
 
 def _timbre(seg, rate, f0):
-    """First 8 harmonics in dB relative to the fundamental, and brightness
-    (spectral centroid as a multiple of the fundamental)."""
+    """First 8 harmonics in dB relative to the strongest of them (a weak
+    fundamental would put the rest at +70 dB), and brightness (spectral centroid
+    as a multiple of the fundamental)."""
     mag, binhz = _spectrum(seg, rate)
-    harm, h1 = [], None
-    for k in range(1, 9):
-        if k * f0 >= rate / 2:
-            break
-        _, m = _peak_near(mag, binhz, k * f0, tol=0.015)
-        h1 = h1 or max(m, 1e-12)
-        harm.append(round(20 * np.log10(max(m, 1e-12) / h1), 1))
+    levels = [max(_peak_near(mag, binhz, k * f0, tol=0.015)[1], 1e-12)
+              for k in range(1, 9) if k * f0 < rate / 2]
+    top = max(levels, default=1e-12)
+    harm = [round(20 * np.log10(m / top), 1) for m in levels]
     p = mag ** 2
     centroid = float((np.arange(len(mag)) * binhz * p).sum() / max(p.sum(), 1e-24) / f0)
     return {"harmonics_db": harm, "centroid_harmonic": round(centroid, 2)}
@@ -358,9 +361,10 @@ def format_note_report(r):
     labels = {"attack": "attack (first 100 ms)", "held": "held (last 300 ms before release)"}
     for k, t in (r.get("timbre") or {}).items():
         if t.get("too_quiet"):
-            lines.append(f"{labels[k]}: too quiet to measure tone ({_below_peak(t['level_db'])})")
+            lines.append(f"{labels[k]}: " + ("silent" if t["level_db"] < -80 else
+                         f"too quiet to measure tone ({t['level_db']} dB below peak)"))
             continue
-        lines.append(f"{labels[k]}: harmonics 1-8 in dB vs fundamental "
+        lines.append(f"{labels[k]}: harmonics 1-8 in dB vs the strongest "
                      + " ".join(f"{v:g}" for v in t["harmonics_db"])
                      + f"; brightness {t['centroid_harmonic']}x fundamental")
     return "\n".join(lines)

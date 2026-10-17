@@ -433,6 +433,10 @@ def update_instrument(song, index, changes, replace=False):
 # --- one-note previews (idea 004) -----------------------------------------
 
 PREVIEW_ROW_SECONDS = 0.1  # speed 6 at 60 Hz, virtual tempo 1:1
+# idle chip before the note: the analysis's silence reference. Furnace's output
+# DC filter settles over the first ~0.1 s of a render, so the reference is the
+# last row of three.
+PREVIEW_PREROLL_ROWS = 3
 
 
 def instrument_channel(song, index, sub_index=0):
@@ -454,8 +458,9 @@ def instrument_channel(song, index, sub_index=0):
 
 def preview_song(song, index, note, channel, hold_rows=8, release_rows=8, volume=None, sub_index=0):
     """A copy of the song that plays one note of instrument index on channel and
-    nothing else: note at row 0, note off after hold_rows, then release_rows of
-    silence. Timing is pinned so a row lasts exactly PREVIEW_ROW_SECONDS."""
+    nothing else: PREVIEW_PREROLL_ROWS of idle chip, the note, a note release after
+    hold_rows, then release_rows. Timing is pinned so a row lasts exactly
+    PREVIEW_ROW_SECONDS. Returns (song, note_on_seconds, note_off_seconds)."""
     instrument(song, index)
     sub = subsong(song, sub_index)
     nchans = len(sub.get("orders") or [])
@@ -463,9 +468,10 @@ def preview_song(song, index, note, channel, hold_rows=8, release_rows=8, volume
         raise IndexError(f"channel {channel} out of range (0-{nchans - 1})")
     if not 0 <= note <= 179:
         raise ValueError(f"note {note} out of range (0-179)")
-    length = hold_rows + release_rows
+    on = PREVIEW_PREROLL_ROWS
+    length = on + hold_rows + release_rows
     if hold_rows < 1 or release_rows < 0 or length > 256:
-        raise ValueError("hold_rows must be at least 1, and hold + release at most 256 rows")
+        raise ValueError(f"hold_rows must be at least 1, and hold + release at most {256 - on} rows")
     out = {k: copy.deepcopy(v) for k, v in song.items() if k != "subsongs"}
     s = {k: copy.deepcopy(v) for k, v in sub.items() if k not in ("patterns", "orders")}
     s.update(speeds=[6], tickRate=60.0, virtualTempo=[150, 150], patternLength=length,
@@ -473,12 +479,12 @@ def preview_song(song, index, note, channel, hold_rows=8, release_rows=8, volume
              patterns=[[] for _ in range(nchans)])
     s.pop("grooves", None)
     rows = [{} for _ in range(length)]
-    rows[0] = {"note": note, "ins": index}
+    rows[on] = {"note": note, "ins": index}
     if volume is not None:
-        rows[0]["vol"] = volume
-    if hold_rows < length:
+        rows[on]["vol"] = volume
+    if on + hold_rows < length:
         # === rather than OFF: OFF stops macros, === runs their release part too
-        rows[hold_rows] = {"note": 254}
+        rows[on + hold_rows] = {"note": 254}
     s["patterns"][channel] = [{"rows": rows}]
     out["subsongs"] = [s]
-    return out, hold_rows * PREVIEW_ROW_SECONDS
+    return out, on * PREVIEW_ROW_SECONDS, (on + hold_rows) * PREVIEW_ROW_SECONDS

@@ -11,13 +11,19 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 from pathlib import Path
 
 from . import notation
 
 _REPO = Path(__file__).resolve().parents[3]
-_DEFAULT_EXE = _REPO / "build-gui" / "Release" / ("furnace.exe" if os.name == "nt" else "furnace")
+_EXE_NAME = "furnace.exe" if os.name == "nt" else "furnace"
+# multi-config generators (MSVC, Xcode) put the binary in Release/; single-config
+# ones (make, Ninja, MinGW) put it at the top of the build directory
+_DEFAULT_EXES = [_REPO / d / sub / _EXE_NAME
+                 for d in ("build-gui", "build") for sub in ("Release", ".")]
 _LOG_LINE = re.compile(r"^\x1b\[[0-9;]*m\[(\w+)\]\x1b\[m (.*)$")
 _IGNORED_ERRORS = ("could not bind text domain",)
 
@@ -27,13 +33,16 @@ class FurnaceError(RuntimeError):
 
 
 def furnace_exe():
-    exe = Path(os.environ.get("FURNACE_EXE", _DEFAULT_EXE))
-    if not exe.is_file():
-        raise FurnaceError(
-            f"furnace binary not found at {exe}. Build the console-subsystem "
-            "Release build or set FURNACE_EXE."
-        )
-    return exe
+    if os.environ.get("FURNACE_EXE"):
+        candidates = [Path(os.environ["FURNACE_EXE"])]
+    else:
+        candidates = _DEFAULT_EXES
+    for exe in candidates:
+        if exe.is_file():
+            return exe
+    raise FurnaceError(
+        "furnace binary not found (looked in " + ", ".join(map(str, candidates)) +
+        "). Build the console-subsystem Release build or set FURNACE_EXE.")
 
 
 def run(args, timeout=600):
@@ -80,16 +89,22 @@ def load(path):
 def save(song, path):
     """Write the song to path (.fur or .json). Furnace validates it on the way."""
     path = Path(path)
-    with tempfile.TemporaryDirectory() as td:
-        src = Path(td) / "song.json"
-        src.write_text(json.dumps(song), encoding="utf-8")
-        tmp = Path(td) / ("out" + (".json" if path.suffix.lower() == ".json" else ".fur"))
-        if tmp.suffix == ".json":
-            run(["-info", src])  # load check: rejects anything loadJSON rejects
-            shutil.copyfile(src, tmp)
-        else:
-            run(["-furout", tmp, src])
+    # the finished file is staged next to the song so the final rename stays
+    # on one filesystem (the temp dir may be on another drive)
+    tmp = path.with_name(f".{path.stem}.furnace-mcp-tmp" +
+                         (".json" if path.suffix.lower() == ".json" else ".fur"))
+    try:
+        with tempfile.TemporaryDirectory() as td:
+            src = Path(td) / "song.json"
+            src.write_text(json.dumps(song), encoding="utf-8")
+            if tmp.suffix == ".json":
+                run(["-info", src])  # load check: rejects anything loadJSON rejects
+                shutil.copyfile(src, tmp)
+            else:
+                run(["-furout", tmp, src])
         os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def render(song, wav_path, per_channel=False):
@@ -118,26 +133,71 @@ def render(song, wav_path, per_channel=False):
 # --- the song open in Furnace -------------------------------------------
 
 def furnace_config_dir():
+    """Where the Furnace GUI keeps its config (DivEngine::initConfDir)."""
     if os.name == "nt":
         return Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "furnace"
+    if sys.platform == "darwin":
+        base = os.environ.get("XDG_CONFIG_HOME") or Path.home()
+        return Path(base) / "Library" / "Application Support" / "Furnace"
     base = os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config")
     return Path(base) / "furnace"
+
+
+def _process_running(pid):
+    if os.name == "nt":
+        import ctypes
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return ctypes.get_last_error() == 5  # access denied: it exists
+        try:
+            code = ctypes.c_ulong()
+            ok = k32.GetExitCodeProcess(h, ctypes.byref(code))
+            return bool(ok) and code.value == 259  # STILL_ACTIVE
+        finally:
+            k32.CloseHandle(h)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def _read_state(f):
+    # Furnace replaces the file by renaming it; on Windows a read can collide
+    # with the rename, so retry briefly before giving up
+    for attempt in range(10):
+        try:
+            return f.read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            raise
+        except OSError:
+            if attempt == 9:
+                raise
+            time.sleep(0.05)
 
 
 def open_song():
     """(path, has_unsaved_changes, reload_count) for the song open in the Furnace GUI.
 
     The fork's GUI writes <config>/open-song.txt (path; 0/1 for unsaved changes;
-    how many times it reloaded the song after an outside change) and deletes it
-    on exit. Raises FurnaceError if nothing usable is open."""
+    how many times it reloaded the song after an outside change; its process ID)
+    and deletes it on exit. A file whose process is gone was left by a crash and
+    is ignored. Raises FurnaceError if nothing usable is open."""
     f = furnace_config_dir() / "open-song.txt"
+    not_running = FurnaceError(
+        "Furnace isn't running (or is an older build without open-song sync). "
+        "Ask the user which song file to use.")
     try:
-        lines = f.read_text(encoding="utf-8").splitlines()
+        lines = _read_state(f)
     except FileNotFoundError:
-        raise FurnaceError(
-            "Furnace isn't running (or is an older build without open-song sync). "
-            "Ask the user which song file to use.")
-    path = lines[0].strip() if lines else ""
+        raise not_running
+    pid = lines[3].strip() if len(lines) > 3 else ""
+    if not pid.isdigit() or not _process_running(int(pid)):
+        raise not_running
+    path = lines[0].strip()
     modified = len(lines) > 1 and lines[1].strip() == "1"
     reloads = int(lines[2]) if len(lines) > 2 and lines[2].strip().isdigit() else None
     if not path:
@@ -331,10 +391,17 @@ def _merge(dst, src):
     for k, v in src.items():
         if isinstance(v, dict) and isinstance(dst.get(k), dict):
             _merge(dst[k], v)
-        elif isinstance(v, list) and isinstance(dst.get(k), list) and v and all(
-                isinstance(x, dict) for x in v) and len(v) == len(dst[k]) and k == "operators":
-            for d, s in zip(dst[k], v):
-                _merge(d, s)
+        elif k == "operators" and isinstance(v, list) and isinstance(dst.get(k), list) and all(
+                isinstance(x, dict) for x in v):
+            # merge by position; operators the update leaves out stay as they are
+            ops = dst[k]
+            for i, s in enumerate(v):
+                if i < len(ops) and isinstance(ops[i], dict):
+                    _merge(ops[i], s)
+                elif i < len(ops):
+                    ops[i] = copy.deepcopy(s)
+                else:
+                    ops.append(copy.deepcopy(s))
         else:
             dst[k] = copy.deepcopy(v)
 

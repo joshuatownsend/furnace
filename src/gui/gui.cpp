@@ -809,11 +809,25 @@ void FurnaceGUI::syncOpenSong() {
     publishedFileName=curFileName;
     publishedModified=modified;
     publishedReloads=openSongReloads;
+    // written to a temporary file and renamed, so a reader never sees a
+    // partial state. the process ID lets the reader ignore a file left
+    // behind by a crash.
     String p=e->getConfigPath()+DIR_SEPARATOR_STR+"open-song.txt";
-    FILE* f=ps_fopen(p.c_str(),"wb");
+    String tmp=p+".tmp";
+#ifdef _WIN32
+    unsigned long pid=GetCurrentProcessId();
+#else
+    unsigned long pid=getpid();
+#endif
+    FILE* f=ps_fopen(tmp.c_str(),"wb");
     if (f!=NULL) {
-      fprintf(f,"%s\n%d\n%d\n",curFileName.c_str(),modified?1:0,openSongReloads);
+      fprintf(f,"%s\n%d\n%d\n%lu\n",curFileName.c_str(),modified?1:0,openSongReloads,pid);
       fclose(f);
+#ifdef _WIN32
+      MoveFileExW(utf8To16(tmp.c_str()).c_str(),utf8To16(p.c_str()).c_str(),MOVEFILE_REPLACE_EXISTING);
+#else
+      rename(tmp.c_str(),p.c_str());
+#endif
     }
   }
 

@@ -38,7 +38,7 @@ The fork's Furnace (from this branch on) writes the path of the song it has open
 | `render` | Render an order range to WAV and return a listen report (loudness, clipping, silence, spectral centroid, band energy; optionally per channel) |
 | `export` | fur, json, vgm, s98, wav, txt |
 
-Notes use Furnace numbering: C-4 is middle C, and lowercase `c_1` is octave −1. Edits save the song in place. The first edit in a session copies it to `<name>.bak.fur`. Renders go to `%TEMP%/furnace-mcp` (or `FURNACE_MCP_RENDERS`).
+Notes use Furnace numbering: C-4 is middle C, and lowercase `c_1` is octave −1. Edits save the song in place. The first edit in a session copies it to `<name>.bak.fur`, replacing any backup from an earlier session. Renders go to `%TEMP%/furnace-mcp` (or `FURNACE_MCP_RENDERS`).
 
 ## Tests
 

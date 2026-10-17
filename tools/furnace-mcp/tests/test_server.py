@@ -1,7 +1,10 @@
 """End-to-end tests through the MCP protocol (in-memory client) against the real
 furnace binary. Skipped when the binary isn't built."""
 
+import os
 import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -101,8 +104,8 @@ def furnace_open(tmp_path, monkeypatch, demo):
     cfg.mkdir()
     monkeypatch.setattr(fsong, "furnace_config_dir", lambda: cfg)
 
-    def set_state(path=demo, modified=False):
-        (cfg / "open-song.txt").write_text(f"{path}\n{int(modified)}\n", encoding="utf-8")
+    def set_state(path=demo, modified=False, pid=os.getpid()):
+        (cfg / "open-song.txt").write_text(f"{path}\n{int(modified)}\n0\n{pid}\n", encoding="utf-8")
     set_state()
     return set_state
 
@@ -136,7 +139,45 @@ async def test_no_furnace_running(tmp_path, monkeypatch):
 
 async def test_unsaved_new_song(tmp_path, monkeypatch):
     monkeypatch.setattr(fsong, "furnace_config_dir", lambda: tmp_path)
-    (tmp_path / "open-song.txt").write_text("\n1\n")
+    (tmp_path / "open-song.txt").write_text(f"\n1\n0\n{os.getpid()}\n")
     async with Client(mcp) as c:
         res = await c.call_tool("current_song", {})
     assert res.is_error and "never been saved" in res.content[0].text
+
+
+async def test_crashed_furnace_is_ignored(furnace_open):
+    # a state file left behind by a Furnace process that no longer exists
+    dead = subprocess.Popen([sys.executable, "-c", "pass"])
+    dead.wait()
+    furnace_open(pid=dead.pid)
+    async with Client(mcp) as c:
+        res = await c.call_tool("set_order", {"order": 0, "patterns": {"0": 0x40}})
+    assert res.is_error and "isn't running" in res.content[0].text
+
+
+async def test_partial_operator_update_keeps_other_operators(demo):
+    before = fsong.instrument(fsong.load(demo), 12)["fm"]["operators"]
+    async with Client(mcp) as c:
+        text(await c.call_tool("write_instrument", {
+            "path": demo, "instrument": 12, "changes": {"fm": {"operators": [{"tl": 20}]}}}))
+    after = fsong.instrument(fsong.load(demo), 12)["fm"]["operators"]
+    assert after[0]["tl"] == 20 and after[1:] == before[1:]
+
+
+async def test_backup_is_refreshed_each_session(demo, monkeypatch):
+    import server
+    bak = Path(demo).with_name("song.bak.fur")
+    bak.write_bytes(b"stale backup from an earlier session")
+    monkeypatch.setattr(server, "_backed_up", set())
+    async with Client(mcp) as c:
+        text(await c.call_tool("set_order", {"path": demo, "order": 0, "patterns": {"0": 5}}))
+    assert bak.read_bytes() == Path(DEMO).read_bytes()
+
+
+def test_save_stages_next_to_the_song(demo, monkeypatch):
+    # the final rename must not cross drives, so nothing is staged in the temp dir
+    seen = []
+    real = os.replace
+    monkeypatch.setattr(fsong.os, "replace", lambda a, b: (seen.append(Path(a)), real(a, b)))
+    fsong.save(fsong.load(demo), demo)
+    assert seen and seen[0].parent == Path(demo).parent and not seen[0].exists()

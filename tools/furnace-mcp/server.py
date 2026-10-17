@@ -97,9 +97,9 @@ def _save(path, song):
     if path.suffix.lower() not in (".fur", ".json"):
         raise ValueError(f"can only save .fur or .json, not {path.suffix}; export a copy first")
     if str(path) not in _backed_up:
-        bak = path.with_name(path.stem + ".bak" + path.suffix)
-        if not bak.exists():
-            shutil.copyfile(path, bak)
+        # the song as it was before this session's first edit (replacing any
+        # backup an earlier session left)
+        shutil.copyfile(path, path.with_name(path.stem + ".bak" + path.suffix))
         _backed_up.add(str(path))
     before = _open_reloads(path)
     fsong.save(song, path)
@@ -229,7 +229,8 @@ def read_instrument(instrument: int, path: str = "") -> str:
 @_tool(_EDIT)
 def write_instrument(instrument: int, changes: dict, replace: bool = False, path: str = "") -> str:
     """Change an instrument. changes is merged into the existing JSON (nested objects
-    merge; "operators" merge per operator; other lists are replaced). replace=true
+    merge; "operators" merge per operator by position, so [{"tl": 20}] changes only
+    operators[0] and leaves the rest; other lists are replaced). replace=true
     replaces it entirely. instrument == instrument count adds a new one. Saves the song.
 
     FM operator order: on 4-op chips (OPN/OPM/OPZ, 4-op OPL) "operators" is in

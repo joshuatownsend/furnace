@@ -296,6 +296,11 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     peak loudness, the first 8 harmonics in dB relative to the fundamental, and
     brightness (spectral centroid as a multiple of the fundamental). Use it to check
     an instrument edit: preview before, write_instrument, preview again, compare.
+    The envelope is reliable. Pitch is reliable when a carrier runs at mult 1; when
+    all carriers sit at higher multiples it can land far off (hundreds of cents) on
+    an untouched pitch. Harmonics and brightness show what changed, but
+    don't predict their direction from FM theory (more feedback can make a patch
+    darker): go by the measured change, and ask the user to confirm tone by ear.
     The note is held for hold_rows (0.1 s each), then released for release_rows.
     channel -1 picks the channel that uses the instrument most in the song (pass one
     explicitly for an unused instrument; it must be a channel of the instrument's

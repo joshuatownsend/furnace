@@ -197,6 +197,9 @@ def _peak_near(mag, binhz, hz, tol=0.03):
     return (i + (0.5 * (a - c) / den if den else 0.0)) * binhz, float(mag[i])
 
 
+QUIET_DB = 40  # a window this far below the peak is too quiet to measure tone
+
+
 def analyze_note(path, note, note_off_s=None):
     """Listen report for one rendered note that starts at time 0: pitch against
     the note played, harmonics, brightness, envelope and loudness."""
@@ -231,7 +234,14 @@ def analyze_note(path, note, note_off_s=None):
     windows = {"attack": (onset, onset + rate // 10)}
     if end - onset > int(0.4 * rate):
         windows["held"] = (end - int(0.3 * rate), end)
-    res["timbre"] = {k: _timbre(mono[a:b], rate, f0) for k, (a, b) in windows.items()}
+    res["timbre"] = {}
+    for k, (a, b) in windows.items():
+        w = mono[a:b]
+        # median, like sustain: a loud decay tail at the window's start mustn't count
+        level = float(np.median(_frames_db(w, rate)[0])) - env["peak_dbfs"]
+        # near the noise floor the "harmonics" are noise, and they read as a real tone
+        res["timbre"][k] = ({"too_quiet": True} if level < -QUIET_DB else _timbre(w, rate, f0))
+        res["timbre"][k]["level_db"] = round(level, 1)
     return res
 
 
@@ -264,13 +274,21 @@ def format_note_report(r):
         octs = round(c / 1200)
         extra = f" (about {octs:+d} octave)" if octs and abs(c - 1200 * octs) < 50 else ""
         lines.append(f"pitch: {p['hz']} Hz, {c:+.1f} cents from {r['expected_hz']} Hz{extra}")
-    rel = "didn't fall 40 dB before the end" if env["release_ms"] is None else f"{env['release_ms']} ms"
+    if env["release_ms"] is not None:
+        rel = f"{env['release_ms']} ms"
+    elif env["sustain_db"] < -QUIET_DB:
+        rel = "n/a (already near silent before note-off)"
+    else:
+        rel = "didn't fall 40 dB before the end"
     lines.append(f"envelope: attack {env['attack_ms']} ms, decay {env['decay_ms']} ms, "
                  f"sustain {env['sustain_db']} dB below peak, release {rel}")
     lines.append(f"loudness: peak {env['peak_dbfs']} dBFS (5 ms RMS)"
                  + (f"; CLIPPING {r['clipped_samples']} samples" if r["clipped_samples"] else ""))
     labels = {"attack": "attack (first 100 ms)", "held": "held (last 300 ms before release)"}
     for k, t in (r.get("timbre") or {}).items():
+        if t.get("too_quiet"):
+            lines.append(f"{labels[k]}: too quiet to measure tone ({t['level_db']} dB below peak)")
+            continue
         lines.append(f"{labels[k]}: harmonics 1-8 in dB vs fundamental "
                      + " ".join(f"{v:g}" for v in t["harmonics_db"])
                      + f"; brightness {t['centroid_harmonic']}x fundamental")

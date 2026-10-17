@@ -93,6 +93,16 @@ def test_attack_and_held_timbre_differ(tmp_path):
     assert timbre["held"]["harmonics_db"][2] < -40
 
 
+def test_near_silent_window_reports_no_tone(tmp_path):
+    # decays to -50 dB and holds there: the held window is noise floor, not tone.
+    # The decay ends inside that window, so its loud start must not count.
+    on, total = int(0.9 * RATE), int(1.2 * RATE)
+    x = 0.6 * tone(440.0, 1.2, (1.0, 0.5)) * adsr(on, total, 0.005, 0.65, 10 ** (-50 / 20), 0.2)
+    r = analysis.analyze_note(write_wav(tmp_path / "a.wav", x), 117, note_off_s=0.9)
+    assert r["timbre"]["held"]["too_quiet"] and "harmonics_db" in r["timbre"]["attack"]
+    assert "too quiet to measure tone" in analysis.format_note_report(r)
+
+
 def test_report_fits(tmp_path):
     wav = write_wav(tmp_path / "a.wav", 0.5 * tone(440.0, 1.0, (1.0, 0.5)))
     text = analysis.format_note_report(analysis.analyze_note(wav, 117, note_off_s=0.6))

@@ -47,7 +47,8 @@ async def test_tools_listed():
     async with Client(mcp) as c:
         names = {t.name for t in (await c.list_tools()).tools}
     assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
-                     "read_instrument", "write_instrument", "render", "export"}
+                     "read_instrument", "write_instrument", "render", "preview_instrument",
+                     "export"}
 
 
 async def test_inspect(demo):

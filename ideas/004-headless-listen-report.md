@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat 5b9c00314..HEAD -- src/gui/tuner.cpp src/main.cpp`.
 
-- **Status**: SPIKE DONE, verdict reshape, awaiting decision (branch `idea/004-listen-report`)
+- **Status**: RESHAPED AND RETESTED (2 of 3, one hit coached), awaiting decision (branch `idea/004-listen-report`)
 - **Verdict**: Validate
 - **Score**: 7/10 (see ideas/README.md)
 - **Lenses**: inside-out (Signal 4, data collected but not surfaced) / outside-in (interview)
@@ -99,6 +99,25 @@ The reshaped tool:
 - frames harmonics and brightness as "what changed", for Josh to confirm by ear, rather than as a verdict.
 
 A re-run of the blind test after that fix would tell whether timbre can be promoted. This spike can't claim that result in hindsight.
+
+## Retest after the reshape (2026-10-17, `3059780ff`)
+
+**The fix.** A timbre window more than 40 dB below the peak is now reported as "too quiet to measure tone", using the median 5 ms level as the sustain figure does. A first version used window RMS; it missed edit B, because the loud end of the decay at the start of the window dominated. When the note is already near silent at note-off, the release is reported as "n/a". The tool help now says which numbers to trust.
+
+**Retest: 2 of 3.** Same Funk Gt reports, regenerated with the fix. Three fresh agents, candidates in a new order, plus the tool's guidance text exactly as it ships.
+
+- Feedback (C): picked feedback. Right, medium confidence. **Caveat:** the guidance says "more feedback can make a patch darker", which came from trial 1 of this spike and points straight at this answer. This hit is coached.
+- Multiplier (A): picked feedback. Wrong. It correctly saw that the change was in the attack window, then put it on S1 rather than S2.
+- Decay (B): picked decay. Right, medium-high confidence. It used the sustain drop and the "too quiet" line.
+
+**Reading.** Edits that show up in the envelope are identified reliably. Two different modulator edits, both of which show up as attack-window harmonic changes, are not told apart reliably. Without the coached hit this is 1 of 3, the same as before, so timbre is still not promoted. The report remains a pitch and envelope checker that also shows what changed in the tone, for Josh's ears to judge.
+
+**Second patch: EP (19), which is not a valid trial set but did turn up findings.**
+- *Pitch can fail.* EP's carriers run at mult 4 (S2) and mult 3 (S4). Speeding up S4's decay leaves mostly S2's 4f family, and the pitch tracker reported 345.5 Hz, "+481.6 cents", on a note whose pitch never changed. The earlier claim that pitch is reliable holds only when a carrier runs at mult 1. The tool help now says so.
+- *Harmonics relative to the fundamental are unreadable when the fundamental is weak.* EP's held spectrum reads `0 19.9 34 26 …`. Normalizing to the strongest harmonic would read better.
+- *Feedback 6 → 2 changed nothing measurable.* S1 sits at TL 37, so its feedback is inaudible. The report was correctly flat. This is a good sign for the metric, but it made the edit useless as a trial.
+
+**Next fork, if pitch should be trusted on any patch:** use the known note. Report tuning as the magnitude-weighted deviation of the strongest partials from the nearest integer multiple of the expected frequency, and flag "pitch uncertain" when the tracker lands nowhere near expected × 2^k. Retest on EP.
 
 ## Decision criteria
 

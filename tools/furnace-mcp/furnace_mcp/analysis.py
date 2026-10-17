@@ -250,7 +250,10 @@ def analyze_note(path, note, note_off_s=None, a4=440.0, note_on_s=0.0):
     # 0.1 s before the note gives that level (earlier, Furnace's DC filter is still
     # settling), so silence reads as zero even when a release is still sounding
     # at the end. Windows remove their own mean below.
+    # Without that, a tail at least 0.1 s past note-off is the next best reference.
     ref = x[max(0, start - rate // 10):start]
+    if len(ref) < rate // 50 and note_off_s is not None and len(x) / rate - note_off_s >= 0.1:
+        ref = x[-int(0.05 * rate):]
     rest = np.median(ref, axis=0) if len(ref) >= rate // 50 else x.mean(axis=0)
     x = x[start:] - rest
     off = note_off_s - note_on_s if note_off_s is not None else len(x) / rate

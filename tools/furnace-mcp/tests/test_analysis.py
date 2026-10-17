@@ -147,6 +147,16 @@ def test_unipolar_chip_silence_is_zero(tmp_path):
     assert abs(r["pitch"]["cents"]) < 5
 
 
+def test_unipolar_without_preroll_uses_the_silent_tail(tmp_path):
+    # a note from t=0 (no idle chip before it) and an idle tail after note-off
+    on, total = int(0.8 * RATE), int(1.4 * RATE)
+    t = np.arange(total) / RATE
+    x = np.full(total, 0.1)
+    x[:on] += 0.3 * (np.sin(2 * np.pi * 440 * t[:on]) > 0)
+    r = analysis.analyze_note(write_wav(tmp_path / "a.wav", x), 117, note_off_s=0.8)
+    assert r["envelope"]["release_ms"] is not None and r["envelope"]["release_ms"] < 30
+
+
 def test_unipolar_release_still_sounding_at_the_end(tmp_path):
     # the tail is not silence, so the reference must come from before the note:
     # 40 of the 60 dB in 0.5 s is about 333 ms

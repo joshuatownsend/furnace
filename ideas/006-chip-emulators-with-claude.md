@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat 5b9c00314..HEAD -- src/engine/sysDef.cpp src/engine/sysDef.h src/engine/dispatchContainer.cpp src/engine/platform/dummy.cpp`.
 
-- **Status**: SPIKE DONE (2026-10-17, branch `idea/006-chip-recipe`); verdict: build it
+- **Status**: DONE (merged to master as #6, `f5ed7676e`, 2026-10-17); verdict: build it
 - **Verdict**: Validate
 - **Score**: 8/10 (band says Advance; held at Validate because the pilot chip, accuracy reference and ID strategy are all open)
 - **Lenses**: inside-out (Signal 4, a pattern hand-rolled 100+ times) / outside-in (interview; upstream: new chips are the largest request theme)
@@ -111,7 +111,7 @@ Prove it on one pilot chip. After that, adding a chip becomes "pick a chip and a
 The pitch-table divider. The recipe's SN76489 analogy said to double the chip's divider; the correct move was to halve it. Doubling it played two octaves high, and the chip's own divider played one octave high. Only the render check showed it. The recipe now says to measure rather than reason.
 
 ### Not checked
-- The GUI: the chip in the "add chip" picker, the oscilloscope and Register View. Josh can check it by eye in a GUI build.
+- The GUI was checked by Josh after the spike: Bally Astrocade appears in the add-chip picker. The oscilloscope and Register View were not reported on.
 - Long-song stability.
 - Real hardware recordings.
 - There is no docs page (`doc/7-systems/`) yet.

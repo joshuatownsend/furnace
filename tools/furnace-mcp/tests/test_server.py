@@ -47,7 +47,8 @@ async def test_tools_listed():
     async with Client(mcp) as c:
         names = {t.name for t in (await c.list_tools()).tools}
     assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
-                     "read_instrument", "write_instrument", "render", "export"}
+                     "read_instrument", "write_instrument", "render", "preview_instrument",
+                     "export"}
 
 
 async def test_inspect(demo):
@@ -197,6 +198,39 @@ def test_save_refuses_a_song_changed_since_it_was_read(demo):
     with pytest.raises(server.ToolError, match="changed on disk"):
         server._save(p, song)
     assert p.read_bytes() == Path(DEMO).read_bytes()
+
+
+def test_preview_channel_ignores_unplayed_patterns():
+    # channel 1 has a stale pattern full of the instrument that no order plays
+    def pat(n):
+        return {"rows": [{"ins": 5}] * n}
+    sub = {"orderLength": 2, "orders": [[0, 0], [1, 1]],
+           "patterns": [[pat(2)], [None, pat(1), pat(10)]]}
+    assert fsong.instrument_channel({"subsongs": [sub]}, 5) == 0
+
+
+def test_preview_releases_with_note_release(demo):
+    # === (254) runs macro release stages; OFF (253) would cut them off
+    preview, _ = fsong.preview_song(fsong.load(demo), 12, 108, 0, hold_rows=8)
+    notes = [r.get("note") for pats in preview["subsongs"][0]["patterns"] for p in pats if p
+             for r in p.get("rows") or []]
+    assert 254 in notes and 253 not in notes
+
+
+async def test_preview_before_and_after_an_edit_keeps_both_wavs(demo):
+    def wav(out):
+        return Path(out.split("wav: ")[1].splitlines()[0])
+    async with Client(mcp) as c:
+        before = wav(text(await c.call_tool("preview_instrument", {"path": demo, "instrument": 13})))
+        text(await c.call_tool("write_instrument", {"path": demo, "instrument": 13, "changes": {"fm": {"fb": 7}}}))
+        after = wav(text(await c.call_tool("preview_instrument", {"path": demo, "instrument": 13})))
+    assert before != after and before.exists() and after.exists()
+
+
+async def test_preview_rejects_notes_outside_the_pitch_range(demo):
+    async with Client(mcp) as c:
+        res = await c.call_tool("preview_instrument", {"path": demo, "instrument": 12, "note": "C-8"})
+    assert res.is_error and "G#0 to B-7" in res.content[0].text
 
 
 def test_save_stages_next_to_the_song(demo, monkeypatch):

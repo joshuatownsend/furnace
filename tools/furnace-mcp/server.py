@@ -287,6 +287,55 @@ def render(order_start: int = 0, order_end: int | None = None,
     return "\n".join(lines)
 
 
+@_tool(_READ)
+def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
+                       hold_rows: int = 8, release_rows: int = 8, subsong: int = 0,
+                       path: str = "") -> str:
+    """Play one note of an instrument on its own and return a listen report: pitch
+    (Hz and cents from the note played), envelope (attack, decay, sustain, release),
+    peak loudness, the first 8 harmonics in dB relative to the fundamental, and
+    brightness (spectral centroid as a multiple of the fundamental). Use it to check
+    an instrument edit: preview before, write_instrument, preview again, compare.
+    The envelope is reliable, and so is pitch. When the pitch tracker can't find
+    the note (all carriers above mult 1 can fool it), the report says "tracker
+    unsure" and gives the tuning from the partials instead, against the note
+    played. Harmonics and brightness show what changed, but
+    don't predict their direction from FM theory (more feedback can make a patch
+    darker): go by the measured change, and ask the user to confirm tone by ear.
+    The note is held for hold_rows (0.1 s each), then released for release_rows.
+    channel -1 picks the channel that uses the instrument most in the song (pass one
+    explicitly for an unused instrument; it must be a channel of the instrument's
+    chip). Doesn't change the song."""
+    p = _path(path)
+    s = _load(p)
+    n = notation.parse_note(note)
+    a4 = float((s.get("songInfo") or {}).get("tuning") or 440.0)
+    if not 25 <= analysis.note_hz(n, a4) <= 4000:
+        raise ValueError(f"{note} is {analysis.note_hz(n, a4):.1f} Hz; the listen report measures "
+                         "pitch between 25 Hz and 4 kHz (G#0 to B-7 at A=440)")
+    if channel < 0:
+        found = fsong.instrument_channel(s, instrument, subsong)
+        if found is None:
+            raise ValueError(f"instrument {instrument:02X} isn't used in the song; pass a channel "
+                             "that belongs to its chip (inspect_song lists the channels)")
+        channel = found
+    preview, off = fsong.preview_song(s, instrument, n, channel, hold_rows, release_rows,
+                                      sub_index=subsong)
+    tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
+    # the instrument's settings are in the name, so the preview after an edit
+    # doesn't overwrite the one before it: both stay for an A/B by ear
+    ver = hashlib.sha1(json.dumps([fsong.instrument(s, instrument), hold_rows, release_rows],
+                                  sort_keys=True).encode("utf-8")).hexdigest()[:6]
+    out = (_render_dir() / f"{p.stem}_{tag}_ins{instrument:02X}_{ver}_"
+                           f"{note.replace('#', 's')}_c{channel}.wav")
+    (_, wav), = fsong.render(preview, out)
+    name = fsong.instrument(s, instrument).get("name", "")
+    label = fsong.channel_labels(s)[channel]
+    head = (f"instrument {instrument:02X} {name!r}, {note} on channel {channel} ({label}), "
+            f"held {off:g} s then released\nwav: {wav}")
+    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off, a4=a4))
+
+
 @_tool(_EDIT)
 def export(output: str, format: str = "", path: str = "") -> str:
     """Export the song. format: fur, json, vgm, s98, wav, txt (default: from the

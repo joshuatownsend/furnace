@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat 5b9c00314..HEAD -- src/main.cpp src/engine/fileOps/json.cpp`. If these changed materially (for example, ideas 001/002 landed), update the plan before starting.
 
-- **Status**: IN PROGRESS (branch `idea/003-mcp-server`, brief refreshed 2026-10-16 at `268424509`)
+- **Status**: DONE (merged to master as #3, `9af8d1dc3`, 2026-10-17; brief refreshed 2026-10-16 at `268424509`)
 - **Verdict**: Validate
 - **Score**: 7/10 (see ideas/README.md)
 - **Lenses**: inside-out (Signal 4, adjacent possible) / outside-in (interview)

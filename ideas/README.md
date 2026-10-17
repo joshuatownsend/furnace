@@ -16,7 +16,7 @@ Fork goal (maintainer, 2026-10-15): **personal fork**. Upstream acceptance doesn
 | 005 | Detect sample pitch automatically | Validate | 6/10 | inside-out | S–M | SELECTED (spike brief) | [005-sample-pitch-detect.md](005-sample-pitch-detect.md) |
 | 006 | Write new chip emulators with Claude (recipe + pilot chip) | Validate | 8/10 | both | M, then M–L per chip | SELECTED (spike brief) | [006-chip-emulators-with-claude.md](006-chip-emulators-with-claude.md) |
 
-Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001, 002 and 003 are merged; 004 is unblocked.
+Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001, 002 and 003 are merged.
 
 ## Parked ideas
 

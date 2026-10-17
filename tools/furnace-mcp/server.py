@@ -293,7 +293,7 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
                        path: str = "") -> str:
     """Play one note of an instrument on its own and return a listen report: pitch
     (Hz and cents from the note played), envelope (attack, decay, sustain, release),
-    peak loudness, the first 8 harmonics in dB relative to the fundamental, and
+    peak loudness, the first 8 harmonics in dB relative to the strongest of them, and
     brightness (spectral centroid as a multiple of the fundamental). Use it to check
     an instrument edit: preview before, write_instrument, preview again, compare.
     The envelope is reliable, and so is pitch. When the pitch tracker can't find
@@ -319,7 +319,7 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
             raise ValueError(f"instrument {instrument:02X} isn't used in the song; pass a channel "
                              "that belongs to its chip (inspect_song lists the channels)")
         channel = found
-    preview, off = fsong.preview_song(s, instrument, n, channel, hold_rows, release_rows,
+    preview, on, off = fsong.preview_song(s, instrument, n, channel, hold_rows, release_rows,
                                       sub_index=subsong)
     tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
     # the instrument's settings are in the name, so the preview after an edit
@@ -332,8 +332,9 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     name = fsong.instrument(s, instrument).get("name", "")
     label = fsong.channel_labels(s)[channel]
     head = (f"instrument {instrument:02X} {name!r}, {note} on channel {channel} ({label}), "
-            f"held {off:g} s then released\nwav: {wav}")
-    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off, a4=a4))
+            f"held {off - on:g} s then released\nwav: {wav}")
+    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off, a4=a4,
+                                                                                note_on_s=on))
 
 
 @_tool(_EDIT)

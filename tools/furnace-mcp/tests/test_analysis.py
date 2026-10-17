@@ -78,11 +78,15 @@ def test_unsure_tracker_report():
     assert "tracker unsure" in line and "-4.8 cents" in line and "100%" in line
 
 
-def test_harmonics_relative_to_fundamental(tmp_path):
+def test_harmonics_relative_to_the_strongest(tmp_path):
     wav = write_wav(tmp_path / "a.wav", 0.5 * tone(440.0, 1.0, (1.0, 0.5, 0.0, 0.1)))
     h = analysis.analyze_note(wav, 117)["timbre"]["held"]["harmonics_db"]
     assert h[0] == 0 and h[1] == pytest.approx(-6.0, abs=0.5) and h[3] == pytest.approx(-20.0, abs=1.0)
     assert h[2] < -40
+    # a weak fundamental: the others don't read as +40 dB
+    wav = write_wav(tmp_path / "b.wav", 0.5 * tone(440.0, 1.0, (0.01, 1.0, 0.5)))
+    h = analysis.analyze_note(wav, 117)["timbre"]["held"]["harmonics_db"]
+    assert h[0] == pytest.approx(-40.0, abs=1.0) and h[1] == 0 and h[2] == pytest.approx(-6.0, abs=0.5)
 
 
 def test_envelope(tmp_path):
@@ -124,16 +128,54 @@ def test_near_silent_window_reports_no_tone(tmp_path):
     assert "too quiet to measure tone" in analysis.format_note_report(r)
 
 
-def test_unipolar_chip_tail_is_silent(tmp_path):
-    # a square wave between 0.1 and 0.4 (an SN76489 idles above zero), then back to
-    # the idle level at note-off: the tail must read as silence, not as sustain
+def unipolar(tmp_path, release_s):
+    # idle at 0.1 for 0.1 s (an SN76489 idles above zero), a square between 0.1 and
+    # 0.4 for 0.8 s, then the square fading by 60 dB over release_s
+    pre, on, total = int(0.1 * RATE), int(0.9 * RATE), int(1.5 * RATE)
+    t = np.arange(total) / RATE
+    amp = np.zeros(total)
+    amp[pre:on] = 0.3
+    amp[on:] = 0.3 * 10 ** (-3 * (t[on:] - 0.9) / release_s)
+    x = 0.1 + amp * (np.sin(2 * np.pi * 440 * t) > 0)
+    return analysis.analyze_note(write_wav(tmp_path / "a.wav", x), 117, note_off_s=0.9, note_on_s=0.1)
+
+
+def test_unipolar_chip_silence_is_zero(tmp_path):
+    # an instant release: the tail must read as silence, not as sustain
+    r = unipolar(tmp_path, 0.001)
+    assert r["envelope"]["release_ms"] is not None and r["envelope"]["release_ms"] < 30
+    assert abs(r["pitch"]["cents"]) < 5
+
+
+def test_unipolar_without_preroll_uses_the_silent_tail(tmp_path):
+    # a note from t=0 (no idle chip before it) and an idle tail after note-off
     on, total = int(0.8 * RATE), int(1.4 * RATE)
     t = np.arange(total) / RATE
     x = np.full(total, 0.1)
     x[:on] += 0.3 * (np.sin(2 * np.pi * 440 * t[:on]) > 0)
     r = analysis.analyze_note(write_wav(tmp_path / "a.wav", x), 117, note_off_s=0.8)
     assert r["envelope"]["release_ms"] is not None and r["envelope"]["release_ms"] < 30
-    assert abs(r["pitch"]["cents"]) < 5
+
+
+def test_unipolar_release_still_sounding_at_the_end(tmp_path):
+    # the tail is not silence, so the reference must come from before the note:
+    # 40 of the 60 dB in 0.5 s is about 333 ms
+    r = unipolar(tmp_path, 0.5)
+    assert r["envelope"]["release_ms"] == pytest.approx(333, abs=40)
+
+
+def test_anti_phase_stereo_does_not_cancel(tmp_path):
+    # one side inverted, as the SNES can do: a mean of the two is silence
+    x = 0.4 * tone(440.0, 1.0, (1.0, 0.5))
+    pcm = (np.stack([x, -x], axis=1) * 32767).astype("<i2")
+    with wave.open(str(tmp_path / "a.wav"), "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(pcm.tobytes())
+    r = analysis.analyze_note(tmp_path / "a.wav", 117)
+    assert abs(r["pitch"]["cents"]) < 1
+    assert r["timbre"]["held"]["harmonics_db"][1] == pytest.approx(-6.0, abs=0.5)
 
 
 def test_song_tuning_is_the_reference():

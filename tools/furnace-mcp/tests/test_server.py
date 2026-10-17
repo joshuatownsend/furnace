@@ -211,10 +211,13 @@ def test_preview_channel_ignores_unplayed_patterns():
 
 def test_preview_releases_with_note_release(demo):
     # === (254) runs macro release stages; OFF (253) would cut them off
-    preview, _ = fsong.preview_song(fsong.load(demo), 12, 108, 0, hold_rows=8)
+    preview, on, off = fsong.preview_song(fsong.load(demo), 12, 108, 0, hold_rows=8)
     notes = [r.get("note") for pats in preview["subsongs"][0]["patterns"] for p in pats if p
              for r in p.get("rows") or []]
     assert 254 in notes and 253 not in notes
+    # an idle row before the note: the analysis takes its silence level from there
+    rows = preview["subsongs"][0]["patterns"][0][0]["rows"]
+    assert rows[0] == rows[2] == {} and rows[3]["note"] == 108 and (on, off) == pytest.approx((0.3, 1.1))
 
 
 async def test_preview_before_and_after_an_edit_keeps_both_wavs(demo):

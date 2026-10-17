@@ -12,11 +12,11 @@ Fork goal (maintainer, 2026-10-15): **personal fork**. Upstream acceptance doesn
 | 001 | Load songs from JSON | Advance | 8/10 | both | M | DONE (merged to master as #2, `9080b4906`, 2026-10-16; 479/481 demos byte-identical, other 2 are render variance, not JSON) | [001-json-song-import.md](001-json-song-import.md) |
 | 002 | CLI export parity (JSON/.fur/S98 out, VGM options, duration in `-info`) | Advance | 8/10 | both | M | DONE (merged to master as #1, `efc6e8019`, 2026-10-16) | [002-cli-export-parity.md](002-cli-export-parity.md) |
 | 003 | Compose and tune instruments with Claude via an MCP server | Validate | 7/10 | both | M after 001+002 | DONE (merged to master as #3, `9af8d1dc3`, 2026-10-17; Josh checked a real session; follow-up: coarse-timestamp change detection) | [003-claude-mcp-server.md](003-claude-mcp-server.md) |
-| 004 | Headless "listen" report for rendered audio | Validate | 7/10 | both | M | IN REVIEW (branch `idea/004-listen-report`) | [004-headless-listen-report.md](004-headless-listen-report.md) |
+| 004 | Headless "listen" report for rendered audio | Validate | 7/10 | both | M | DONE (merged to master as #4, `e9e5b95bf`, 2026-10-17; follow-up: harmonics vs strongest, anti-phase stereo, silent-tail reference) | [004-headless-listen-report.md](004-headless-listen-report.md) |
 | 005 | Detect sample pitch automatically | Validate | 6/10 | inside-out | S–M | SELECTED (spike brief) | [005-sample-pitch-detect.md](005-sample-pitch-detect.md) |
 | 006 | Write new chip emulators with Claude (recipe + pilot chip) | Validate | 8/10 | both | M, then M–L per chip | SELECTED (spike brief) | [006-chip-emulators-with-claude.md](006-chip-emulators-with-claude.md) |
 
-Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001, 002 and 003 are merged.
+Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001 to 004 are merged.
 
 ## Parked ideas
 

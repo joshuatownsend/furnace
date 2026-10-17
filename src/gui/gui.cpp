@@ -824,9 +824,6 @@ static int64_t songFileStamp(const String& path) {
 
 void FurnaceGUI::syncOpenSong() {
   if (curFileName!=publishedFileName || modified!=publishedModified || openSongReloads!=publishedReloads) {
-    publishedFileName=curFileName;
-    publishedModified=modified;
-    publishedReloads=openSongReloads;
     // written to a temporary file and renamed, so a reader never sees a
     // partial state. the reader ignores files whose process (named in the
     // file name) is gone, i.e. left behind by a crash. a recovery backup is
@@ -836,15 +833,28 @@ void FurnaceGUI::syncOpenSong() {
     String p=openSongStatePath(e->getConfigPath());
     String tmp=p+".tmp";
     String name=(curFileName.find(backupPath)==0)?String():curFileName;
-    FILE* f=ps_fopen(tmp.c_str(),"wb");
-    if (f!=NULL) {
-      fprintf(f,"%s\n%d\n%d\n%lld\n",name.c_str(),modified?1:0,openSongReloads,openSongFocus);
-      fclose(f);
+    // the state only counts as published once the rename succeeded; on
+    // failure (e.g. a reader has the file open on Windows) retry shortly
+    static unsigned int publishRetryAt=0;
+    if ((int)(SDL_GetTicks()-publishRetryAt)>=0) {
+      bool ok=false;
+      FILE* f=ps_fopen(tmp.c_str(),"wb");
+      if (f!=NULL) {
+        bool written=fprintf(f,"%s\n%d\n%d\n%lld\n",name.c_str(),modified?1:0,openSongReloads,openSongFocus)>0;
+        written=(fclose(f)==0) && written;
 #ifdef _WIN32
-      MoveFileExW(utf8To16(tmp.c_str()).c_str(),utf8To16(p.c_str()).c_str(),MOVEFILE_REPLACE_EXISTING);
+        ok=written && MoveFileExW(utf8To16(tmp.c_str()).c_str(),utf8To16(p.c_str()).c_str(),MOVEFILE_REPLACE_EXISTING);
 #else
-      rename(tmp.c_str(),p.c_str());
+        ok=written && rename(tmp.c_str(),p.c_str())==0;
 #endif
+      }
+      if (ok) {
+        publishedFileName=curFileName;
+        publishedModified=modified;
+        publishedReloads=openSongReloads;
+      } else {
+        publishRetryAt=SDL_GetTicks()+100;
+      }
     }
   }
 

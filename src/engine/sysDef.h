@@ -268,6 +268,9 @@ enum DivSystem {
   DIV_SYSTEM_NAMCO_POLEPOS,
   DIV_SYSTEM_KLATTSCH,
 
+  // fork-only chips (file IDs 0x1000 and up; see ideas/chip-recipe.md)
+  DIV_SYSTEM_ASTROCADE,
+
   DIV_SYSTEM_MAX
 };
 

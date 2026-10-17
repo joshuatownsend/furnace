@@ -361,6 +361,7 @@ TAParamResult pVersion(String) {
   printf("- MAME GA20 core (modified version) by Acho A. Tang, R. Belmont and Valley Bell (BSD 3-clause)\n");
   printf("- MAME SegaPCM core by Hiromitsu Shioya and Olivier Galibert (BSD 3-clause)\n");
   printf("- MAME µPD1771C-017 HLE core by David Viens (BSD 3-clause)\n");
+  printf("- MAME Astrocade core by Aaron Giles and Frank Palazzolo (BSD 3-clause)\n");
   printf("- QSound core by superctr (BSD 3-clause)\n");
   printf("- VICE VIC-20 by Rami Rasanen and viznut (GPLv2)\n");
   printf("- VICE TED by Andreas Boose, Tibor Biczo and Marco van den Heuvel (GPLv2)\n");

@@ -2820,6 +2820,24 @@ void DivEngine::registerSystems() {
     }
   );
 
+  // fork-only chips (file IDs 0x1000 and up)
+  sysDefs[DIV_SYSTEM_ASTROCADE]=new DivSysDef(
+    _("Bally Astrocade"), NULL, 0x1000, 0, 4, 4, 4,
+    false, true, 0, false, 0, 0, 0,
+    _("the custom I/O chip of Bally's home console and Midway's arcade boards (Gorf, Wizard of Wor).\nthree square waves divided down from one master oscillator, which vibrato or noise can wobble, plus noise."),
+    DivChanDefFunc({
+      DivChanDef(_("Tone A"), "A" , DIV_CH_PULSE, DIV_INS_STD),
+      DivChanDef(_("Tone B"), "B" , DIV_CH_PULSE, DIV_INS_STD),
+      DivChanDef(_("Tone C"), "C" , DIV_CH_PULSE, DIV_INS_STD),
+      DivChanDef(_("Noise") , "NO", DIV_CH_NOISE, DIV_INS_STD)
+    }),
+    {
+      {0x10, {DIV_CMD_STD_NOISE_FREQ, _("10xx: Set master oscillator (00-FF; higher is lower in pitch for all tones)")}},
+      {0x11, {DIV_CMD_FM_LFO, _("11xy: Set vibrato (bits 6-7: speed, 0 fastest; bits 0-5: depth)")}},
+      {0x12, {DIV_CMD_PCE_LFO_MODE, _("12xx: Set master oscillator modulation (0: vibrato; 1: noise, depth follows the noise channel's volume)")}},
+    }
+  );
+
   sysDefs[DIV_SYSTEM_DUMMY]=new DivSysDef(
     _("Dummy System"), NULL, 0xfd, 0, 8, 1, 128,
     false, true, 0, false, 0, 0, 0,

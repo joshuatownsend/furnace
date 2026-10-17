@@ -3009,6 +3009,7 @@ bool FurnaceGUI::drawSysConf(int chan, int sysPos, DivSystem type, DivConfig& fl
     case DIV_SYSTEM_PET:
     case DIV_SYSTEM_GA20:
     case DIV_SYSTEM_PV1000:
+    case DIV_SYSTEM_ASTROCADE:
     case DIV_SYSTEM_C219:
     case DIV_SYSTEM_BIFURCATOR:
     case DIV_SYSTEM_POWERNOISE:

@@ -76,6 +76,8 @@ SafeWriter* DivEngine::saveJSON(DivJSONExportOptions* options) {
     for (int i=0; i<song.systemLen; i++) {
       JSON chip;
       chip["id"]=song.system[i];
+      // fork: the file ID, which unlike the enum value never moves when chips are added
+      chip["fileID"]=systemToFileFur(song.system[i]);
       chip["name"]=getSystemName(song.system[i]);
       chip["volume"]=song.systemVol[i];
       chip["panning"]=song.systemPan[i];
@@ -1532,7 +1534,15 @@ bool DivEngine::loadJSON(unsigned char* file, size_t len) {
     ds.systemLen=chips.size();
     for (int i=0; i<ds.systemLen; i++) {
       const JSON& c=chips[i];
-      int id=c.at("id").get<int>();
+      int id;
+      if (c.contains("fileID")) {
+        // fork: prefer the file ID; "id" is an enum value that shifts as chips are added
+        int fileID=c["fileID"].get<int>();
+        id=(fileID>0 && fileID<=0xffff)?systemFromFileFur(fileID):DIV_SYSTEM_NULL;
+        if (id==DIV_SYSTEM_NULL) throw std::out_of_range(fmt::sprintf("chip %d: unknown chip file ID 0x%x",i,fileID));
+      } else {
+        id=c.at("id").get<int>();
+      }
       if (id<=0 || id>=DIV_SYSTEM_MAX || sysDefs[id]==NULL) throw std::out_of_range(fmt::sprintf("chip %d: unknown chip ID %d",i,id));
       // compound systems (e.g. "Sega Genesis") can't be installed as one chip; list their parts instead
       if (sysDefs[id]->isCompound) throw std::out_of_range(fmt::sprintf("chip %d: ID %d (%s) is a compound system; list its component chips instead",i,id,sysDefs[id]->name));

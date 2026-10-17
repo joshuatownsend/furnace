@@ -163,6 +163,7 @@ const char* aboutLine[]={
   _N("MAME GA20 core by Acho A. Tang, R. Belmont and Valley Bell (modified version)"),
   _N("MAME SegaPCM core by Hiromitsu Shioya and Olivier Galibert"),
   _N("MAME µPD1771C-017 HLE core by David Viens"),
+  _N("MAME Astrocade core by Aaron Giles and Frank Palazzolo"),
   _N("SAASound by Dave Hooper and Simon Owen"),
   _N("SameBoy by Lior Halphon"),
   _N("Mednafen PCE, T6W28 (modified) and Virtual Boy audio cores"),

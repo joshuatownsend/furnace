@@ -21,9 +21,11 @@ The fork's Furnace (from this branch on) writes the path of the song it has open
 - If you have unsaved changes in Furnace, edits are refused until you save. If you edit in Furnace after Claude's change arrives, Furnace asks before reloading.
 - A song that has never been saved has no file, so save it first.
 
-## Example song
+## Example songs
 
 `examples/victory_fanfare.fur` is a short Genesis (YM2612 + SN76489) fanfare made with these tools: a timpani roll, then three FM trumpets, bass trombone, DAC timpani and cymbals, and a PSG snare. It's the song to test with. Edits save in place, so copy it somewhere else before editing and keep the repo copy unchanged.
+
+`examples/neon_midway.fur` is an upbeat 1970s console tune for the Bally Astrocade (the fork-only chip): lead, offbeat arpeggio chords, octave bass and noise drums, 45 s, looping past the intro. `examples/neon_midway.py` is its source: it writes the song as Furnace JSON and converts it with `furnace -furout`, so edit the script and rerun it (`python neon_midway.py [furnace.exe]`) rather than editing the .fur.
 
 ## Tools
 

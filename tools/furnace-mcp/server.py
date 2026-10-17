@@ -57,6 +57,7 @@ def _tool(annotations):
 
 _cache = {}
 _backed_up = set()
+_loaded_rev = {}  # path -> file mtime when its song was last read
 
 
 def _path(p):
@@ -84,6 +85,7 @@ def _check_not_dirty(path):
 def _load(path):
     key = str(path)
     mtime = path.stat().st_mtime_ns
+    _loaded_rev[key] = mtime
     hit = _cache.get(key)
     if hit and hit[0] == mtime:
         return json.loads(hit[1])
@@ -94,6 +96,12 @@ def _load(path):
 
 def _save(path, song):
     _check_not_dirty(path)
+    # the song must still be the revision this edit was made on; otherwise
+    # (e.g. the user saved in Furnace meanwhile) writing would discard that save
+    if path.stat().st_mtime_ns != _loaded_rev.get(str(path)):
+        raise ToolError(
+            "the song file changed on disk while this edit was being made (probably "
+            "saved in Furnace). Nothing was written; read it again and redo the edit.")
     if path.suffix.lower() not in (".fur", ".json"):
         raise ValueError(f"can only save .fur or .json, not {path.suffix}; export a copy first")
     if str(path) not in _backed_up:

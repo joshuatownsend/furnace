@@ -188,6 +188,17 @@ async def test_backup_is_refreshed_each_session(demo, monkeypatch):
     assert bak.read_bytes() == Path(DEMO).read_bytes()
 
 
+def test_save_refuses_a_song_changed_since_it_was_read(demo):
+    import server
+    p = Path(demo).resolve()
+    song = server._load(p)
+    st = p.stat()
+    os.utime(p, ns=(st.st_atime_ns, st.st_mtime_ns + 1_000_000_000))  # "saved in Furnace"
+    with pytest.raises(server.ToolError, match="changed on disk"):
+        server._save(p, song)
+    assert p.read_bytes() == Path(DEMO).read_bytes()
+
+
 def test_save_stages_next_to_the_song(demo, monkeypatch):
     # the final rename must not cross drives, so nothing is staged in the temp dir
     seen = []

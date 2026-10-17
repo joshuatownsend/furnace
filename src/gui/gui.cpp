@@ -871,6 +871,7 @@ void FurnaceGUI::syncOpenSong() {
 }
 
 void FurnaceGUI::reloadOpenSong() {
+  size_t sub=e->getCurrentSubSong();
   int ord=curOrder;
   SelectionPoint cur=cursor;
   if (load(curFileName)>0) {
@@ -878,6 +879,10 @@ void FurnaceGUI::reloadOpenSong() {
     return;
   }
   // stay where the user was
+  if (sub<e->song.subsong.size()) {
+    e->changeSongP(sub);
+    recalcTimestamps=true;
+  }
   if (ord<e->curSubSong->ordersLen) {
     curOrder=ord;
     e->setOrder(ord);
@@ -3004,8 +3009,10 @@ int FurnaceGUI::save(String path, int dmfVersion) {
   curFileName=path;
   backupLock.unlock();
   modified=false;
-  // our own save isn't an outside change: re-baseline the file watch
-  watchedFileName="";
+  // our own save isn't an outside change: re-baseline the file watch now, so
+  // an outside change right after this save is still noticed
+  watchedFileName=curFileName;
+  watchedStamp=songFileStamp(curFileName);
   updateWindowTitle();
   if (!e->getWarnings().empty()) {
     showWarning(e->getWarnings(),GUI_WARN_GENERIC);
@@ -3083,7 +3090,8 @@ int FurnaceGUI::load(String path) {
   curFileName=path;
   backupLock.unlock();
   modified=false;
-  watchedFileName="";
+  watchedFileName=curFileName;
+  watchedStamp=songFileStamp(curFileName);
   curNibble=0;
   orderNibble=false;
   orderCursor=-1;

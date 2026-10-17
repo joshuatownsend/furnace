@@ -182,28 +182,38 @@ def _read_state(f):
 def open_song():
     """(path, has_unsaved_changes, reload_count) for the song open in the Furnace GUI.
 
-    The fork's GUI writes <config>/open-song.txt (path; 0/1 for unsaved changes;
-    how many times it reloaded the song after an outside change; its process ID)
-    and deletes it on exit. A file whose process is gone was left by a crash and
-    is ignored. Raises FurnaceError if nothing usable is open."""
-    f = furnace_config_dir() / "open-song.txt"
-    not_running = FurnaceError(
-        "Furnace isn't running (or is an older build without open-song sync). "
-        "Ask the user which song file to use.")
-    try:
-        lines = _read_state(f)
-    except FileNotFoundError:
-        raise not_running
-    pid = lines[3].strip() if len(lines) > 3 else ""
-    if not pid.isdigit() or not _process_running(int(pid)):
-        raise not_running
+    Each fork GUI process writes <config>/open-song-<pid>.txt (path; 0/1 for
+    unsaved changes; how many times it reloaded the song after an outside
+    change; when its window last gained focus, in ms) and deletes it on exit.
+    Files whose process is gone were left by a crash and are ignored; with
+    several Furnace windows open, the one focused last wins. Raises
+    FurnaceError if nothing usable is open."""
+    best = None
+    for f in furnace_config_dir().glob("open-song-*.txt"):
+        m = re.fullmatch(r"open-song-(\d+)\.txt", f.name)
+        if not m or not _process_running(int(m.group(1))):
+            continue
+        try:
+            lines = _read_state(f)
+        except FileNotFoundError:
+            continue  # that Furnace just exited
+        if len(lines) < 4 or not lines[3].strip().isdigit():
+            continue
+        focus = int(lines[3])
+        if best is None or focus > best[0]:
+            best = (focus, lines)
+    if best is None:
+        raise FurnaceError(
+            "Furnace isn't running (or is an older build without open-song sync). "
+            "Ask the user which song file to use.")
+    lines = best[1]
     path = lines[0].strip()
-    modified = len(lines) > 1 and lines[1].strip() == "1"
-    reloads = int(lines[2]) if len(lines) > 2 and lines[2].strip().isdigit() else None
+    modified = lines[1].strip() == "1"
+    reloads = int(lines[2]) if lines[2].strip().isdigit() else None
     if not path:
         raise FurnaceError(
-            "the song open in Furnace has never been saved, so it has no file yet. "
-            "Ask the user to save it (File > Save As) first.")
+            "the song open in Furnace has never been saved (or is a recovery backup), "
+            "so it has no file to edit. Ask the user to save it (File > Save As) first.")
     return Path(path), modified, reloads
 
 

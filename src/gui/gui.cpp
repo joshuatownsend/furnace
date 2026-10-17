@@ -41,6 +41,7 @@
 #include <zlib.h>
 #include <fmt/printf.h>
 #include <stdexcept>
+#include <chrono>
 #include "../engine/bsr.h"
 
 #ifdef _WIN32
@@ -777,13 +778,30 @@ void FurnaceGUI::updateWindowTitle() {
 
 // --- open-song sync (fork, ideas/003) ---
 // tools/furnace-mcp edits song files on disk. so that "the song I have open"
-// means something to it, the GUI writes the open file's path to
-// <config>/open-song.txt, and reloads the file when it changes on disk.
+// means something to it, each GUI process writes the open file's path to
+// <config>/open-song-<pid>.txt, and reloads the file when it changes on disk.
+// with several Furnace processes open, the server picks the live one that was
+// focused last.
 
 // times the open song was reloaded after an outside change. published so the
 // MCP server can tell the user an edit is now on screen.
 static int openSongReloads=0;
 static int publishedReloads=0;
+// when this process's window last gained focus (ms since the Unix epoch)
+static long long openSongFocus=0;
+
+static long long wallClockMs() {
+  return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
+static String openSongStatePath(const String& configPath) {
+#ifdef _WIN32
+  unsigned long pid=GetCurrentProcessId();
+#else
+  unsigned long pid=getpid();
+#endif
+  return fmt::sprintf("%s%sopen-song-%lu.txt",configPath,DIR_SEPARATOR_STR,pid);
+}
 
 static int64_t songFileStamp(const String& path) {
 #ifdef _WIN32
@@ -810,18 +828,17 @@ void FurnaceGUI::syncOpenSong() {
     publishedModified=modified;
     publishedReloads=openSongReloads;
     // written to a temporary file and renamed, so a reader never sees a
-    // partial state. the process ID lets the reader ignore a file left
-    // behind by a crash.
-    String p=e->getConfigPath()+DIR_SEPARATOR_STR+"open-song.txt";
+    // partial state. the reader ignores files whose process (named in the
+    // file name) is gone, i.e. left behind by a crash. a recovery backup is
+    // published without a path: it isn't watched, and the user should save it
+    // somewhere real first.
+    if (openSongFocus==0) openSongFocus=wallClockMs();
+    String p=openSongStatePath(e->getConfigPath());
     String tmp=p+".tmp";
-#ifdef _WIN32
-    unsigned long pid=GetCurrentProcessId();
-#else
-    unsigned long pid=getpid();
-#endif
+    String name=(curFileName.find(backupPath)==0)?String():curFileName;
     FILE* f=ps_fopen(tmp.c_str(),"wb");
     if (f!=NULL) {
-      fprintf(f,"%s\n%d\n%d\n%lu\n",curFileName.c_str(),modified?1:0,openSongReloads,pid);
+      fprintf(f,"%s\n%d\n%d\n%lld\n",name.c_str(),modified?1:0,openSongReloads,openSongFocus);
       fclose(f);
 #ifdef _WIN32
       MoveFileExW(utf8To16(tmp.c_str()).c_str(),utf8To16(p.c_str()).c_str(),MOVEFILE_REPLACE_EXISTING);
@@ -4881,6 +4898,12 @@ bool FurnaceGUI::loop() {
               scrMax=false;
               updateWindow=true;
               logV("window restored");
+              break;
+            case SDL_WINDOWEVENT_FOCUS_GAINED:
+              // with several Furnace windows open, the last focused one is
+              // "the open song" for tools/furnace-mcp
+              openSongFocus=wallClockMs();
+              publishedFileName="\x01";
               break;
             case SDL_WINDOWEVENT_SHOWN:
               logV("window shown");
@@ -9691,7 +9714,7 @@ void FurnaceGUI::commitState(DivConfig& conf) {
 }
 
 bool FurnaceGUI::finish(bool saveConfig) {
-  deleteFile((e->getConfigPath()+DIR_SEPARATOR_STR+"open-song.txt").c_str());
+  deleteFile(openSongStatePath(e->getConfigPath()).c_str());
   if (!quitNoSave) {
     commitState(e->getConfObject());
     if (userPresetsOpen) {

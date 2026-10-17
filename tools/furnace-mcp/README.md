@@ -14,7 +14,7 @@ An MCP server that lets Claude read, edit, render and export Furnace songs. Fork
 
 ## Working on the song open in Furnace
 
-The fork's Furnace (from this branch on) writes the path of the song it has open to `open-song.txt` in its config folder (`%APPDATA%\furnace` on Windows), and reloads that file when it changes on disk. So:
+The fork's Furnace (from this branch on) writes the path of the song it has open to `open-song-<process id>.txt` in its config folder (`%APPDATA%\furnace` on Windows; with several Furnace windows open, the one you used last counts), and reloads that file when it changes on disk. So:
 
 - Every tool's `path` is optional. Leave it out and the tools work on the song open in Furnace. `current_song` says which file that is.
 - After each edit, Furnace reloads the song and keeps your place. The tool result says "Furnace reloaded the song" once it has.

@@ -104,8 +104,9 @@ def furnace_open(tmp_path, monkeypatch, demo):
     cfg.mkdir()
     monkeypatch.setattr(fsong, "furnace_config_dir", lambda: cfg)
 
-    def set_state(path=demo, modified=False, pid=os.getpid()):
-        (cfg / "open-song.txt").write_text(f"{path}\n{int(modified)}\n0\n{pid}\n", encoding="utf-8")
+    def set_state(path=demo, modified=False, pid=os.getpid(), focus=1000):
+        (cfg / f"open-song-{pid}.txt").write_text(
+            f"{path}\n{int(modified)}\n0\n{focus}\n", encoding="utf-8")
     set_state()
     return set_state
 
@@ -139,7 +140,7 @@ async def test_no_furnace_running(tmp_path, monkeypatch):
 
 async def test_unsaved_new_song(tmp_path, monkeypatch):
     monkeypatch.setattr(fsong, "furnace_config_dir", lambda: tmp_path)
-    (tmp_path / "open-song.txt").write_text(f"\n1\n0\n{os.getpid()}\n")
+    (tmp_path / f"open-song-{os.getpid()}.txt").write_text("\n1\n0\n1000\n")
     async with Client(mcp) as c:
         res = await c.call_tool("current_song", {})
     assert res.is_error and "never been saved" in res.content[0].text
@@ -149,10 +150,23 @@ async def test_crashed_furnace_is_ignored(furnace_open):
     # a state file left behind by a Furnace process that no longer exists
     dead = subprocess.Popen([sys.executable, "-c", "pass"])
     dead.wait()
+    for f in fsong.furnace_config_dir().glob("open-song-*.txt"):
+        f.unlink()
     furnace_open(pid=dead.pid)
     async with Client(mcp) as c:
         res = await c.call_tool("set_order", {"order": 0, "patterns": {"0": 0x40}})
     assert res.is_error and "isn't running" in res.content[0].text
+
+
+async def test_last_focused_furnace_wins(demo, tmp_path, furnace_open):
+    other = tmp_path / "other.fur"
+    shutil.copyfile(DEMO, other)
+    # two live processes: this one, and its parent
+    furnace_open(path=other, pid=os.getppid(), focus=2000)
+    async with Client(mcp) as c:
+        assert text(await c.call_tool("current_song", {})).startswith(str(other.resolve()))
+        furnace_open(path=demo, pid=os.getpid(), focus=3000)
+        assert text(await c.call_tool("current_song", {})).startswith(str(Path(demo).resolve()))
 
 
 async def test_partial_operator_update_keeps_other_operators(demo):

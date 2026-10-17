@@ -80,6 +80,14 @@ async def test_inspect_reports_the_ay_octave():
     assert "AY-3-8910 (channel 0)" in out
 
 
+async def test_inspect_does_not_probe_a_sample_chip():
+    # a probe would measure sample 0's tuning, not the chip's octave
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("inspect_song", {"path": str(REPO / "demos" / "amiga" / "Ibiza.fur")}))
+    line = next(l for l in out.splitlines() if l.startswith("pitch"))
+    assert "not measured (a sample chip" in line and "Hz" not in line, line
+
+
 async def test_write_read_render(demo):
     async with Client(mcp) as c:
         rows = "A-4 0C 7F\n" + "...\n" * 62 + "OFF"

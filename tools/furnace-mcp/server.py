@@ -148,8 +148,8 @@ def _pitch_line(s, subsong=0):
     a4 = float((s.get("songInfo") or {}).get("tuning") or 440.0)
     parts = []
     for ci, name, ch, probe, on, off in fsong.pitch_probes(s, subsong):
-        if probe is None:
-            parts.append(f"{name}: not measured (no instrument used on it yet)")
+        if isinstance(probe, str):
+            parts.append(f"{name}: not measured ({probe})")
             continue
         key = hashlib.sha1(json.dumps(probe, sort_keys=True).encode("utf-8")).hexdigest()
         if key not in _pitch_cache:

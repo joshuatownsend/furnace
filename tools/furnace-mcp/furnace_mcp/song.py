@@ -488,3 +488,51 @@ def preview_song(song, index, note, channel, hold_rows=8, release_rows=8, volume
     s["patterns"][channel] = [{"rows": rows}]
     out["subsongs"] = [s]
     return out, on * PREVIEW_ROW_SECONDS, (on + hold_rows) * PREVIEW_ROW_SECONDS
+
+
+PROBE_NOTE = 117  # A-4
+
+
+def pitch_probes(song, sub_index=0):
+    """One probe per chip for measuring what a written A-4 sounds like: Furnace
+    keeps each chip's traditional octave naming (an SN76489 sounds two octaves
+    above the written note, NES one; FM chips as written). Yields (chip index,
+    chip name, channel, probe song, note_on_seconds, note_off_seconds), or None in
+    place of the probe when the song gives no instrument to play it with.
+    The probe plays A-4 on the chip's first channel with the instrument the song
+    uses most on that chip, in its default settings."""
+    sub = subsong(song, sub_index)
+    patterns = sub.get("patterns") or []
+    orders = sub.get("orders") or []
+    first = 0
+    for ci, chip in enumerate(song.get("chips") or []):
+        n = chip.get("channels") or 0
+        # the probe channel's own instruments first: another channel of the chip
+        # may be a noise or drum channel
+        for chans in ([first], range(first, first + n)):
+            counts = {}
+            for ch in chans:
+                if ch >= len(orders):
+                    continue
+                pats = patterns[ch] if ch < len(patterns) else []
+                for o in range(sub.get("orderLength", len(orders[ch]))):
+                    idx = orders[ch][o]
+                    pat = pats[idx] if idx < len(pats) else None
+                    for row in (pat or {}).get("rows") or []:
+                        ins = row.get("ins")
+                        if ins is not None and 0 <= ins < len(song.get("instruments") or []):
+                            counts[ins] = counts.get(ins, 0) + 1
+            if counts:
+                break
+        name = chip.get("name", "chip")
+        if not counts or first >= len(orders):
+            yield ci, name, first, None, None, None
+        else:
+            # a default instrument of that type: the song's own may be tuned away
+            # from the note (an arp or pitch macro, an FM patch's multipliers)
+            ins = {"name": "pitch probe", "type": song["instruments"][max(counts, key=counts.get)].get("type", 0)}
+            probe = dict(song, instruments=[ins])
+            out, on, off = preview_song(probe, 0, PROBE_NOTE, first, hold_rows=4,
+                                        release_rows=0, sub_index=sub_index)
+            yield ci, name, first, out, on, off
+        first += n

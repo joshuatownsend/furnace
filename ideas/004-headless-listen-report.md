@@ -139,7 +139,7 @@ Still open: harmonics are given relative to the fundamental. On patches with a w
 Read C:\dev\furnace\furnace\ideas\004-headless-listen-report.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: test whether a text audio-analysis report lets Claude tell how a Furnace instrument edit changed the sound. Do not build beyond the spike; prototype work happens behind a flag or on a branch.
 ```
 
-## Follow-up after merge
+## Follow-up after merge (DONE, #5, `2899fef31`)
 
 These were deferred from PR #4 at Josh's call and go into one follow-up PR:
 

@@ -835,8 +835,9 @@ static uint64_t songHashUpdate(uint64_t h, const unsigned char* buf, size_t len)
   return h;
 }
 
-// false if the file can't be read or is too large to hash every poll; the
-// stamp is the only check then
+// false if the file can't be read or is too large to hash every poll (checked
+// before reading; the loop cap catches a file growing mid-read); the stamp is
+// the only check then
 static bool songFileHash(const String& path, uint64_t& hash) {
   unsigned char buf[65536];
   uint64_t h=SONG_HASH_INIT;
@@ -847,6 +848,12 @@ static bool songFileHash(const String& path, uint64_t& hash) {
   // fail while we're reading it
   HANDLE f=CreateFileW(utf8To16(path.c_str()).c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
   if (f==INVALID_HANDLE_VALUE) return false;
+  // size first, so an oversized song costs nothing per poll
+  LARGE_INTEGER fileSize;
+  if (!GetFileSizeEx(f,&fileSize) || fileSize.QuadPart>SONG_HASH_MAX_SIZE) {
+    CloseHandle(f);
+    return false;
+  }
   DWORD got=0;
   while (true) {
     if (!ReadFile(f,buf,sizeof(buf),&got,NULL)) {
@@ -865,6 +872,11 @@ static bool songFileHash(const String& path, uint64_t& hash) {
 #else
   FILE* f=ps_fopen(path.c_str(),"rb");
   if (f==NULL) return false;
+  struct stat fileStat;
+  if (fstat(fileno(f),&fileStat)!=0 || fileStat.st_size>SONG_HASH_MAX_SIZE) {
+    fclose(f);
+    return false;
+  }
   size_t got;
   while ((got=fread(buf,1,sizeof(buf),f))>0) {
     total+=got;

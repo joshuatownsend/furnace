@@ -477,7 +477,8 @@ def preview_song(song, index, note, channel, hold_rows=8, release_rows=8, volume
     if volume is not None:
         rows[0]["vol"] = volume
     if hold_rows < length:
-        rows[hold_rows] = {"note": 253}  # OFF
+        # === rather than OFF: OFF stops macros, === runs their release part too
+        rows[hold_rows] = {"note": 254}
     s["patterns"][channel] = [{"rows": rows}]
     out["subsongs"] = [s]
     return out, hold_rows * PREVIEW_ROW_SECONDS

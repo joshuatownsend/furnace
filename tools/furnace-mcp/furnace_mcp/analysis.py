@@ -102,26 +102,32 @@ def format_report(name, r):
 
 # --- one-note analysis (idea 004) -----------------------------------------
 
-def note_hz(note):
-    """Equal-tempered frequency of a Furnace note number (C-4 = 108 = middle C)."""
-    return 440.0 * 2.0 ** ((note - 48 - 69) / 12.0)
+def note_hz(note, a4=440.0):
+    """Equal-tempered frequency of a Furnace note number (C-4 = 108 = middle C);
+    a4 is the song's tuning (songInfo.tuning)."""
+    return a4 * 2.0 ** ((note - 48 - 69) / 12.0)
 
 
-def _frames_db(mono, rate, ms=5):
+def _frames_db(x, rate, ms=5):
+    """5 ms RMS levels. For a (samples, channels) array, the louder channel per
+    frame: averaging channels would understate a panned sound by up to 6 dB."""
     win = max(1, int(rate * ms / 1000))
-    n = len(mono) - len(mono) % win
-    rms = np.sqrt(np.mean(mono[:n].reshape(-1, win) ** 2, axis=1))
+    n = len(x) - len(x) % win
+    frames = x[:n].reshape(n // win, win, *x.shape[1:])
+    rms = np.sqrt(np.mean(frames ** 2, axis=1))
+    if rms.ndim == 2:
+        rms = rms.max(axis=1)
     return 20.0 * np.log10(np.maximum(rms, 1e-9)), ms / 1000.0
 
 
-def envelope(mono, rate, note_off_s):
+def envelope(x, rate, note_off_s):
     """Attack/decay/sustain/release estimate from 5 ms RMS frames.
 
     attack: onset (40 dB below the peak) to the peak. decay: peak until the
     level settles within 3 dB of the sustain level. sustain: median level over
     the last 30% of the held part, relative to the peak. release: note-off until
     the level falls 40 dB below its note-off level (None if it never does)."""
-    db, step = _frames_db(mono, rate)
+    db, step = _frames_db(x, rate)
     off = min(len(db), int(note_off_s / step))
     if off < 4 or db[:off].max() < -80:
         return None
@@ -233,7 +239,7 @@ def _tuning(mag, binhz, ref, top=5000.0):
 QUIET_DB = 40  # a window this far below the peak is too quiet to measure tone
 
 
-def analyze_note(path, note, note_off_s=None):
+def analyze_note(path, note, note_off_s=None, a4=440.0):
     """Listen report for one rendered note that starts at time 0: pitch against
     the note played, harmonics, brightness, envelope and loudness."""
     x, rate = read_wav(path)
@@ -243,14 +249,17 @@ def analyze_note(path, note, note_off_s=None):
     # offset after note-off that reads as sound. Windows remove their own mean below.
     tail = x[-int(0.05 * rate):]
     rest = np.median(tail, axis=0) if len(x) / rate - off >= 0.1 else x.mean(axis=0)
-    mono = (x - rest).mean(axis=1)
-    res = {"note": note, "expected_hz": round(note_hz(note), 2)}
-    env = envelope(mono, rate, off)
+    clipped = int(np.count_nonzero(np.abs(x) >= 0.999))
+    x = x - rest
+    mono = x.mean(axis=1)
+    hz = note_hz(note, a4)
+    res = {"note": note, "expected_hz": round(hz, 2)}
+    env = envelope(x, rate, off)
     if env is None:
         res["silent"] = True
         return res
     res["envelope"] = env
-    res["clipped_samples"] = int(np.count_nonzero(np.abs(x) >= 0.999))
+    res["clipped_samples"] = clipped
     # pitch comes from the held part after the attack
     end = int(off * rate)
     start = min(int((env["attack_ms"] / 1000 + 0.02) * rate), end)
@@ -264,8 +273,8 @@ def analyze_note(path, note, note_off_s=None):
         refined, _ = _peak_near(mag, binhz, f0)
         if refined:
             f0 = refined
-    tuning = _tuning(mag, binhz, note_hz(note)) if len(seg) else None
-    cents = None if f0 is None else float(1200 * np.log2(f0 / note_hz(note)))
+    tuning = _tuning(mag, binhz, hz) if len(seg) else None
+    cents = None if f0 is None else float(1200 * np.log2(f0 / hz))
     if cents is not None and abs(cents - 1200 * round(cents / 1200)) < 50:
         res["pitch"] = {"hz": round(f0, 2), "cents": round(cents, 1)}
     elif tuning and tuning[1] >= 0.6:
@@ -279,7 +288,7 @@ def analyze_note(path, note, note_off_s=None):
     else:
         res["pitch"] = None
         return res
-    f0 = f0 if f0 is not None and not res["pitch"].get("uncertain") else note_hz(note)
+    f0 = f0 if f0 is not None and not res["pitch"].get("uncertain") else hz
     # timbre at two moments: FM modulators often decay fast, so the attack can
     # sound quite different from the held note
     onset = int(np.argmax(np.abs(mono) > np.abs(mono).max() * 0.01))
@@ -290,7 +299,7 @@ def analyze_note(path, note, note_off_s=None):
     for k, (a, b) in windows.items():
         w = mono[a:b]
         # median, like sustain: a loud decay tail at the window's start mustn't count
-        level = float(np.median(_frames_db(w, rate)[0])) - env["peak_dbfs"]
+        level = float(np.median(_frames_db(x[a:b], rate)[0])) - env["peak_dbfs"]
         # near the noise floor the "harmonics" are noise, and they read as a real tone
         res["timbre"][k] = ({"too_quiet": True} if level < -QUIET_DB else _timbre(w - w.mean(), rate, f0))
         res["timbre"][k]["level_db"] = round(level, 1)

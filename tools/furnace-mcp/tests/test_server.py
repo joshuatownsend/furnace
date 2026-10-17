@@ -209,6 +209,14 @@ def test_preview_channel_ignores_unplayed_patterns():
     assert fsong.instrument_channel({"subsongs": [sub]}, 5) == 0
 
 
+def test_preview_releases_with_note_release(demo):
+    # === (254) runs macro release stages; OFF (253) would cut them off
+    preview, _ = fsong.preview_song(fsong.load(demo), 12, 108, 0, hold_rows=8)
+    notes = [r.get("note") for pats in preview["subsongs"][0]["patterns"] for p in pats if p
+             for r in p.get("rows") or []]
+    assert 254 in notes and 253 not in notes
+
+
 async def test_preview_before_and_after_an_edit_keeps_both_wavs(demo):
     def wav(out):
         return Path(out.split("wav: ")[1].splitlines()[0])

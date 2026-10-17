@@ -309,9 +309,10 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     p = _path(path)
     s = _load(p)
     n = notation.parse_note(note)
-    if not 25 <= analysis.note_hz(n) <= 4000:
-        raise ValueError(f"{note} is {analysis.note_hz(n):.1f} Hz; the listen report measures pitch "
-                         "between 25 Hz and 4 kHz, so pick a note from G#0 to B-7")
+    a4 = float((s.get("songInfo") or {}).get("tuning") or 440.0)
+    if not 25 <= analysis.note_hz(n, a4) <= 4000:
+        raise ValueError(f"{note} is {analysis.note_hz(n, a4):.1f} Hz; the listen report measures "
+                         "pitch between 25 Hz and 4 kHz (G#0 to B-7 at A=440)")
     if channel < 0:
         found = fsong.instrument_channel(s, instrument, subsong)
         if found is None:
@@ -332,7 +333,7 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     label = fsong.channel_labels(s)[channel]
     head = (f"instrument {instrument:02X} {name!r}, {note} on channel {channel} ({label}), "
             f"held {off:g} s then released\nwav: {wav}")
-    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off))
+    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off, a4=a4))
 
 
 @_tool(_EDIT)

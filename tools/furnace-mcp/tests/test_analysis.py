@@ -136,6 +136,30 @@ def test_unipolar_chip_tail_is_silent(tmp_path):
     assert abs(r["pitch"]["cents"]) < 5
 
 
+def test_song_tuning_is_the_reference():
+    assert analysis.note_hz(117, a4=432.0) == pytest.approx(432.0)
+
+
+def test_pitch_against_song_tuning(tmp_path):
+    wav = write_wav(tmp_path / "a.wav", 0.5 * tone(432.0, 1.0, (1.0, 0.5)))
+    r = analysis.analyze_note(wav, 117, a4=432.0)
+    assert abs(r["pitch"]["cents"]) < 1 and r["expected_hz"] == 432.0
+
+
+def test_hard_panned_loudness(tmp_path):
+    # left only: the peak must be the left channel's level, not 6 dB under it
+    x = 0.5 * tone(440.0, 1.0)
+    pcm = (np.stack([x, np.zeros_like(x)], axis=1) * 32767).astype("<i2")
+    with wave.open(str(tmp_path / "a.wav"), "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(RATE)
+        w.writeframes(pcm.tobytes())
+    env = analysis.analyze_note(tmp_path / "a.wav", 117)["envelope"]
+    # -9 dBFS; 5 ms frames wobble a few tenths. Averaging channels read about -15
+    assert env["peak_dbfs"] == pytest.approx(20 * np.log10(0.5 / np.sqrt(2)), abs=0.5)
+
+
 def test_report_fits(tmp_path):
     wav = write_wav(tmp_path / "a.wav", 0.5 * tone(440.0, 1.0, (1.0, 0.5)))
     text = analysis.format_note_report(analysis.analyze_note(wav, 117, note_off_s=0.6))

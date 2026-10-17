@@ -209,6 +209,16 @@ def test_preview_channel_ignores_unplayed_patterns():
     assert fsong.instrument_channel({"subsongs": [sub]}, 5) == 0
 
 
+async def test_preview_before_and_after_an_edit_keeps_both_wavs(demo):
+    def wav(out):
+        return Path(out.split("wav: ")[1].splitlines()[0])
+    async with Client(mcp) as c:
+        before = wav(text(await c.call_tool("preview_instrument", {"path": demo, "instrument": 13})))
+        text(await c.call_tool("write_instrument", {"path": demo, "instrument": 13, "changes": {"fm": {"fb": 7}}}))
+        after = wav(text(await c.call_tool("preview_instrument", {"path": demo, "instrument": 13})))
+    assert before != after and before.exists() and after.exists()
+
+
 async def test_preview_rejects_notes_outside_the_pitch_range(demo):
     async with Client(mcp) as c:
         res = await c.call_tool("preview_instrument", {"path": demo, "instrument": 12, "note": "C-8"})

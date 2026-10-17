@@ -321,7 +321,12 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     preview, off = fsong.preview_song(s, instrument, n, channel, hold_rows, release_rows,
                                       sub_index=subsong)
     tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
-    out = _render_dir() / f"{p.stem}_{tag}_ins{instrument:02X}_{note.replace('#', 's')}_c{channel}.wav"
+    # the instrument's settings are in the name, so the preview after an edit
+    # doesn't overwrite the one before it: both stay for an A/B by ear
+    ver = hashlib.sha1(json.dumps([fsong.instrument(s, instrument), hold_rows, release_rows],
+                                  sort_keys=True).encode("utf-8")).hexdigest()[:6]
+    out = (_render_dir() / f"{p.stem}_{tag}_ins{instrument:02X}_{ver}_"
+                           f"{note.replace('#', 's')}_c{channel}.wav")
     (_, wav), = fsong.render(preview, out)
     name = fsong.instrument(s, instrument).get("name", "")
     label = fsong.channel_labels(s)[channel]

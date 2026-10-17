@@ -77,6 +77,7 @@
 #include "platform/k007232.h"
 #include "platform/ga20.h"
 #include "platform/supervision.h"
+#include "platform/astrocade.h"
 #include "platform/scvtone.h"
 #include "platform/sm8521.h"
 #include "platform/pv1000.h"
@@ -699,6 +700,9 @@ void DivDispatchContainer::init(DivSystem sys, DivEngine* eng, int chanCount, do
       break;
     case DIV_SYSTEM_SUPERVISION:
       dispatch=new DivPlatformSupervision;
+      break;
+    case DIV_SYSTEM_ASTROCADE:
+      dispatch=new DivPlatformAstrocade;
       break;
     case DIV_SYSTEM_UPD1771C:
       dispatch=new DivPlatformSCV;

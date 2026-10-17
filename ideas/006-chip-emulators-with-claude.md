@@ -1,9 +1,9 @@
 # 006 — Write new chip emulators with Claude
 
 > Brief for a design spike. Investigate and prototype; do not ship.
-> Drift check: `git diff --stat 5b9c00314..HEAD -- src/engine/sysDef.cpp src/engine/song.h src/engine/dispatchContainer.cpp src/engine/platform/dummy.cpp`.
+> Drift check: `git diff --stat 5b9c00314..HEAD -- src/engine/sysDef.cpp src/engine/sysDef.h src/engine/dispatchContainer.cpp src/engine/platform/dummy.cpp`.
 
-- **Status**: SELECTED
+- **Status**: SPIKE DONE (2026-10-17, branch `idea/006-chip-recipe`); verdict: build it
 - **Verdict**: Validate
 - **Score**: 8/10 (band says Advance; held at Validate because the pilot chip, accuracy reference and ID strategy are all open)
 - **Lenses**: inside-out (Signal 4, a pattern hand-rolled 100+ times) / outside-in (interview; upstream: new chips are the largest request theme)
@@ -55,6 +55,13 @@ Prove it on one pilot chip. After that, adding a chip becomes "pick a chip and a
 5. **How much GUI** does a minimal chip need? Can `insEdit.cpp` and `sysConf.cpp` changes be skipped for a first version?
 6. **Can the recipe become a Claude Code skill** so later chips need only "add chip X using core Y"?
 
+## Decisions (2026-10-17)
+
+- **Chip IDs: `0x1000` and up**, chosen by Josh. Current `.fur` files store the chip ID in two bytes (`DivSysDef::id` is `unsigned short`, written at `fur.cpp:2599`, read at `fur.cpp:870`). Upstream has only ever assigned IDs below `0x100` (`papers/format.md`), so a range at `0x1000` should never collide. Songs that use a fork chip won't open in upstream Furnace, as with any choice.
+- **JSON stores the enum value, not the file ID** (`json.cpp:78`, read at `json.cpp:1537`). The fork's enum entries come after upstream's, so every upstream chip addition would shift them. The pilot adds the file ID to JSON export and makes import prefer it.
+- **Pilot chip: Bally Astrocade**, chosen by Josh. Three square voices, noise, and a master oscillator with vibrato. Reference core: MAME `astrocde.cpp`.
+- **The enum moved**: it is in `src/engine/sysDef.h` now, not `song.h`. Supervision (`9d279cead`) and µPD1771C (`f14ff2579`, MAME core `97402e6d4`) both predate the reorganisation (`9b35ca77c`), so the recipe maps their touchpoints to current paths.
+
 ## Spike plan
 
 1. **Write the recipe from evidence.** Read `9d279cead` (Supervision) and one more simple chip addition, and write `ideas/chip-recipe.md`: every touchpoint, what goes there, and a one-line example from Supervision. *You'll know when* the recipe lists all 16 touchpoints with no "figure it out" steps.
@@ -63,6 +70,51 @@ Prove it on one pilot chip. After that, adding a chip becomes "pick a chip and a
 4. **Follow the recipe** to add the pilot chip on a branch, without GUI polish. *You'll know when* the fork builds, the chip appears in the system picker, and a one-channel test song plays.
 5. **Verification harness**: export the test song's register log, run it through the standalone reference core, and compare against Furnace's `-output` (pitch and level per note, or a sample-level match if the cores match). *You'll know when* you have a pass/fail number, not a judgement.
 6. **Reflect**: note where the recipe was wrong or incomplete and update it. *You'll know when* a second chip could be started from the recipe alone.
+
+## Spike results (2026-10-17)
+
+**Verdict: build it.** The pilot chip passes both checks. The recipe needed one real correction, the pitch divider, which the check caught. The ID policy holds.
+
+### What was built (branch `idea/006-chip-recipe`)
+- `ideas/chip-recipe.md`: every touchpoint with its current path and line, the driver skeleton, build and smoke test, traps, and verification. Written from Supervision (`9d279cead`) and µPD1771C (`f14ff2579`, `97402e6d4`), mapped to HEAD, then corrected by the pilot.
+- **Bally Astrocade, file ID `0x1000`:**
+  - core `src/engine/platform/sound/astrocade.cpp/.h`, MAME's core with only the device plumbing removed;
+  - driver `src/engine/platform/astrocade.cpp/.h`;
+  - registered in 11 small edits (`sysDef.h/.cpp`, `dispatchContainer.cpp`, `CMakeLists.txt`, `guiConst.cpp`, `sysConf.cpp`, `about.cpp`, `main.cpp`, `papers/format.md`).
+  - Channels: tones A, B and C, plus noise. Instrument type `DIV_INS_STD` (standard macros: volume, arpeggio, pitch).
+  - Effects: `10xx` master oscillator, `11xx` vibrato speed and depth, `12xx` modulation source (vibrato or noise).
+- **JSON chip identity:** export writes `fileID`, import prefers it (`json.cpp`). Fork chips in JSON no longer shift when upstream adds a chip.
+- **Checks in `tools/chip-verify/astrocade/`:**
+  - `fidelity.cpp`, run by `build.cmd`. It builds MAME's unmodified original (pinned to `d0f1c15`) against a small framework stand-in.
+  - `wiring.py`.
+
+### Results
+- **Core fidelity: PASS.** 5 seeds × 20 s of chip time (35.8 M samples each, about 3,600 random register writes) gave 0 mismatched samples. A planted one-bit change (vibrato depth mask) failed with 29 M mismatches.
+- **Driver wiring: PASS**, 28 segments:
+  - Every note sits within 0.02 cents of an integer period's exact frequency.
+  - The chosen period is the nearest one, or one step off in 2 of 25 notes; that one-step miss is Furnace's pitch-table rounding, shared with every period-based chip.
+  - Volume steps match the linear mix to 0.01 dB. Noise is noise (spectral flatness 0.65).
+  - All three effects work. `10xx` retunes the tones. `11C8` vibrato alternates the cycle length in the ratio 0.749 (0.750 expected). `12xx` noise modulation scatters cycle lengths by 22%.
+  - The chip loads by its JSON `fileID` and survives a `.fur` save and reload with ID `0x1000`.
+  - Planted wiring bugs failed the check: swapped tone B and C volume registers, and a driver ignoring `11xx` and `12xx`.
+- **Regression:** the furnace-mcp tests pass (60/60). A 30-demo JSON round trip gave 30 of 30 renders byte-identical to the `.fur` renders, with `fileID` present in every export.
+
+### Answers to the open questions
+1. **Pilot chip:** Bally Astrocade (Josh).
+2. **Reference:** the original MAME core compiled unmodified next to the port. A register-log comparison inside Furnace was unnecessary, because the core check covers the emulation and the render check covers the driver. Neither proves MAME matches real hardware.
+3. **ID policy:** `0x1000` and up (Josh). It works because `.fur` stores IDs in 16 bits. Instrument types are different: one byte, numbered densely by upstream. So fork chips must use `DIV_INS_STD` or an existing type, never a new one.
+4. **Real or invented:** real (a port). Invented chips skip the core-fidelity check, and "correct" means sounding right to Josh.
+5. **GUI:** none beyond the picker list, a category list and the "no options" case in chip settings. The standard instrument editor covers the instrument.
+6. **Skill:** feasible. The recipe plus the two checks make "add chip X using core Y" a repeatable request. Turning it into a Claude Code skill is the next step if Josh wants more chips.
+
+### The recipe's one real miss
+The pitch-table divider. The recipe's SN76489 analogy said to double the chip's divider; the correct move was to halve it. Doubling it played two octaves high, and the chip's own divider played one octave high. Only the render check showed it. The recipe now says to measure rather than reason.
+
+### Not checked
+- The GUI: the chip in the "add chip" picker, the oscilloscope and Register View. Josh can check it by eye in a GUI build.
+- Long-song stability.
+- Real hardware recordings.
+- There is no docs page (`doc/7-systems/`) yet.
 
 ## Decision criteria
 

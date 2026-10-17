@@ -1386,6 +1386,7 @@ const int availableSystems[]={
   DIV_SYSTEM_SID3,
   DIV_SYSTEM_MULTIPCM,
   DIV_SYSTEM_KLATTSCH,
+  DIV_SYSTEM_ASTROCADE,
   0 // don't remove this last one!
 };
 
@@ -1440,6 +1441,7 @@ const int chipsSquare[]={
   DIV_SYSTEM_T6W28,
   DIV_SYSTEM_PV1000,
   DIV_SYSTEM_TED,
+  DIV_SYSTEM_ASTROCADE,
   0 // don't remove this last one!
 };
 

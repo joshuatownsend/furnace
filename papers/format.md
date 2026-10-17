@@ -281,6 +281,10 @@ the channel count is stored in the file in order to allow Furnace to load files 
 - 0xfe: reserved for development
 - 0xff: reserved for development
 
+this fork (not upstream Furnace) reserves 0x1000 and up for its own chips. songs that use them do not open in upstream Furnace.
+
+- 0x1000: Bally Astrocade - 4 channels
+
 notes:
 
 - (UNAVAILABLE) means that the chip hasn't been implemented in Furnace yet.

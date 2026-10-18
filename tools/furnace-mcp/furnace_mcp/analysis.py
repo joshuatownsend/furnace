@@ -389,18 +389,36 @@ MAX_APERIODICITY = 0.3  # YIN's dip at the period must reach this low...
 MIN_HARMONICITY = 0.6   # ...and this share of the energy must sit on its harmonics
 
 
+def _holds_cycles(body):
+    """Whether a loop body, repeated forward, repeats at least twice within
+    itself (its first clear YIN dip is at or below two thirds of its length)."""
+    n = len(body)
+    if n < 6:
+        return False
+    tiled = np.tile(np.asarray(body, dtype=np.float64), 4)
+    tiled = tiled - tiled.mean()
+    cmnd = _cmnd(tiled, n)
+    dips = np.nonzero(cmnd[2:n] < 0.15)[0]
+    return len(dips) > 0 and dips[0] + 2 <= n * 2 / 3
+
+
 def sample_segment(x, loop=None):
     """The steady part of a sample to measure: (audio, description).
 
     A looped sample is measured on its loop, repeated as it plays: that is what
-    holds a note. Always forward: a backward or ping-pong pass has the same
-    period, and the turn-around of a ping-pong would add a slow repeat of its own.
+    holds a note. A backward loop has the same period as a forward one. A
+    ping-pong loop holding several cycles is measured forward too (the turn-
+    around only adds a slow repeat), but one holding a single cycle or less is
+    measured as it plays, forward then back: half a cycle only becomes a whole
+    one that way.
     Otherwise the part from the end of the attack until it fades 30 dB below its
     peak."""
     if loop:
-        start, end, _ = loop
+        start, end, mode = loop
         body = x[start:end]
-        if len(body) >= 8:
+        if mode == 2 and len(body) >= 2 and not _holds_cycles(body):  # DIV_SAMPLE_LOOP_PINGPONG
+            body = np.concatenate((body, body[::-1]))
+        if len(body) >= 2:
             if len(body) < TILE_TO:
                 body = np.tile(body, -(-TILE_TO // len(body)))
             return body[:SEGMENT_MAX], f"the loop ({start}-{end})"

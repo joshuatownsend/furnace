@@ -142,3 +142,19 @@ def test_sample_instruments_follow_the_sample_mode():
     assert fsong.sample_instruments(song, 2) == [0, 1, 3]
     assert fsong.sample_instruments(song, 3) == [0]
     assert fsong.sample_instruments(song, 0) == []  # the note map replaces initSample
+
+
+def test_tiny_loop_after_a_long_attack():
+    # a 3-sample held loop is measured, not the 300 Hz attack before it
+    rate = 8000
+    attack = synth("saw", 300.0, rate, 0.5)
+    x = np.concatenate([attack, [0.8, -0.4, -0.4]])
+    assert abs(cents_off(x, rate, rate / 3, (len(attack), len(x), 0))) < 10
+
+
+def test_ping_pong_half_cycle_loop():
+    # a rising half-wave played forward then back is one triangle cycle of twice its length
+    ramp = np.linspace(-0.8, 0.8, 16)
+    x = np.concatenate([np.zeros(50), ramp])
+    r = analysis.detect_pitch(analysis.sample_segment(x, (50, 66, 2))[0], 8000)
+    assert r["period"] == pytest.approx(32, abs=0.05)

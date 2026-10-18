@@ -98,6 +98,7 @@ int benchMode=0;
 int subsong=-1;
 DivCSOptions csExportOptions;
 DivAudioExportOptions exportOptions;
+int exportChansLast=0; // highest channel -exportchans asked for (from 1), 0 if not given
 DivConfig romExportConfig;
 
 #ifdef HAVE_GUI
@@ -504,6 +505,7 @@ TAParamResult pExportChans(String val) {
     for (int i=first; i<=last; i++) {
       exportOptions.channelMask[i-1]=true;
     }
+    if (last>exportChansLast) exportChansLast=last;
     pos=comma+1;
   }
   return TA_PARAM_SUCCESS;
@@ -1169,6 +1171,11 @@ int main(int argc, char** argv) {
   // changeSongP() ignores an invalid index, so check -subsong here for every command-line mode
   if (!fileName.empty() && (consoleMode || benchMode || infoMode || outputMode) && subsong>=(int)e.song.subsong.size()) {
     reportError(fmt::sprintf(_("sub-song %d does not exist (the song has %d)"),subsong,(int)e.song.subsong.size()));
+    finishLogFile();
+    return 1;
+  }
+  if (exportChansLast>e.song.chans) {
+    reportError(fmt::sprintf(_("-exportchans asks for channel %d, but the song has %d channels"),exportChansLast,e.song.chans));
     finishLogFile();
     return 1;
   }

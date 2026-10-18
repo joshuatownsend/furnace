@@ -491,16 +491,14 @@ void FurnaceGUI::resetColors() {
   }
 }
 
-#define COLOR_PRESET_COUNT ((int)(sizeof(guiColorPresets)/sizeof(guiColorPresets[0])))
-
 void FurnaceGUI::askColorPreset(int index) {
-  if (index<0 || index>=COLOR_PRESET_COUNT) return;
+  if (index<0 || index>=IM_ARRAYSIZE(guiColorPresets)) return;
   colorPresetToLoad=index;
   showWarning(fmt::sprintf(_("Load the %s color preset? It replaces every color, so export your scheme first if you want to keep it."),_(guiColorPresets[index].name)),GUI_WARN_COLOR_PRESET);
 }
 
 void FurnaceGUI::applyColorPreset(int index) {
-  if (index<0 || index>=COLOR_PRESET_COUNT) return;
+  if (index<0 || index>=IM_ARRAYSIZE(guiColorPresets)) return;
   // a preset sets the colors and the base style; guru mode and shading are the user's
   bool basic=settings.basicColors;
   int shading=settings.guiColorsShading;
@@ -534,11 +532,17 @@ static float contrastRatio(const ImVec4& a, const ImVec4& b) {
   return (la+0.05f)/(lb+0.05f);
 }
 
+// the main background as drawn: always opaque
+static ImVec4 opaqueBackground(const ImVec4* uiColors) {
+  ImVec4 base=uiColors[GUI_COLOR_BACKGROUND];
+  base.w=1.0f;
+  return base;
+}
+
 // true when the Dark/Light choice doesn't match the window color: that choice
 // only restyles what basic mode derives from the accents
 bool FurnaceGUI::colorSchemeMismatch() {
-  ImVec4 base=uiColors[GUI_COLOR_BACKGROUND];
-  base.w=1.0f;
+  ImVec4 base=opaqueBackground(uiColors);
   bool lightWindows=colorLuminance(colorOver(uiColors[GUI_COLOR_FRAME_BACKGROUND],base))>0.5f;
   return lightWindows!=(settings.guiColorsBase==1);
 }
@@ -552,8 +556,7 @@ void FurnaceGUI::drawContrastCheck() {
     ImVec4 bg;
   };
   const ImGuiStyle& sty=ImGui::GetStyle();
-  ImVec4 base=uiColors[GUI_COLOR_BACKGROUND];
-  base.w=1.0f;
+  ImVec4 base=opaqueBackground(uiColors);
   ImVec4 window=colorOver(sty.Colors[ImGuiCol_WindowBg],base);
   ImVec4 pattern=colorOver(uiColors[GUI_COLOR_PATTERN_BG],window);
   const ContrastPair pairs[]={
@@ -584,23 +587,30 @@ void FurnaceGUI::drawContrastCheck() {
     {GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,GUI_COLOR_PATTERN_BG,pattern},
     {GUI_COLOR_PATTERN_EFFECT_MISC,GUI_COLOR_PATTERN_BG,pattern},
   };
-  const int total=sizeof(pairs)/sizeof(pairs[0]);
+  const int total=IM_ARRAYSIZE(pairs);
 
-  int low=0;
-  for (const ContrastPair& i: pairs) {
-    if (contrastRatio(colorOver(uiColors[i.fg],i.bg),i.bg)<4.5f) low++;
-  }
-  if (low==0) {
-    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1)."),total);
-    return;
-  }
-  ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) and may be hard to read:"),low,total);
-  ImDrawList* dl=ImGui::GetWindowDrawList();
-  ImGui::Indent();
+  struct LowContrast {
+    const ContrastPair* pair;
+    ImVec4 fg;
+    float ratio;
+  };
+  std::vector<LowContrast> low;
   for (const ContrastPair& i: pairs) {
     ImVec4 fg=colorOver(uiColors[i.fg],i.bg);
     float ratio=contrastRatio(fg,i.bg);
-    if (ratio>=4.5f) continue;
+    if (ratio<4.5f) low.push_back({&i,fg,ratio});
+  }
+  if (low.empty()) {
+    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1)."),total);
+    return;
+  }
+  ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) and may be hard to read:"),(int)low.size(),total);
+  ImDrawList* dl=ImGui::GetWindowDrawList();
+  ImGui::Indent();
+  for (const LowContrast& l: low) {
+    const ContrastPair& i=*l.pair;
+    const ImVec4& fg=l.fg;
+    float ratio=l.ratio;
     // a sample of the text on its background, then which colors they are
     String sample=fmt::sprintf("Aa %.1f:1",ratio);
     ImVec2 pos=ImGui::GetCursorScreenPos();

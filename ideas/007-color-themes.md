@@ -52,7 +52,7 @@ The Dark/Light radio switches the Dear ImGui base style (`settings.cpp:700`), bu
 **Build it** (decision criteria): a scheme file alone makes the UI light, so the fork now ships:
 
 - **Presets in Settings > Color**: Dark (default) and Light buttons, with a confirmation, since a preset replaces every color. They are built into the binary (`src/gui/colorPresets.h`), not installed as files (question 2). A preset keeps the user's guru-mode and frame-shading choices.
-- **A hint under the Dark/Light radio** when the choice doesn't match the window color, with a button that loads the matching preset. That is the discoverability fix for the Reddit question.
+- **The Dark/Light radio offers the matching preset** when the choice doesn't match the window color (with the same confirmation). That is the discoverability fix for the Reddit question: choosing Light now leads to a light UI.
 - **A contrast check** in the Color tab: 26 text-on-background pairs (UI text on windows, popups, buttons, inputs, headers, tabs and the title bar; order and pattern text, effects, volume, instrument and the cursor row), each against WCAG AA (4.5:1). Failing pairs show a sample of the text on its background and the ratio. It reads the applied style, so basic mode's derived colors count. Upstream's own dark defaults fail two pairs: the time (3.3:1) and misc (3.7:1) effect colors.
 - **`python -m furnace_mcp.scheme check FILE`** runs the same check over an exported scheme file (question 4's prototype); `... presets` regenerates the header.
 

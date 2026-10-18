@@ -2455,7 +2455,7 @@ void FurnaceGUI::initSettings() {
     SettingEntry(_N("Color scheme presets"),NULL,[this]{
       ImGui::AlignTextToFramePadding();
       ImGui::Text(_("Presets:"));
-      for (int i=0; i<(int)(sizeof(guiColorPresets)/sizeof(guiColorPresets[0])); i++) {
+      for (int i=0; i<IM_ARRAYSIZE(guiColorPresets); i++) {
         ImGui::SameLine();
         if (ImGui::Button(fmt::sprintf("%s##colPreset%d",_(guiColorPresets[i].name),i).c_str())) {
           askColorPreset(i);
@@ -2500,21 +2500,12 @@ void FurnaceGUI::initSettings() {
           {_N("Dark##gcb0"),0},
           {_N("Light##gcb1"),1}
         }
-      ).Callback([this]{applyUISettings(false);}) BASIC_MODE,
-      SettingEntry(_N("Color scheme type hint"),NULL,[this]{
-        int preset=settings.guiColorsBase?1:0;
-        ImGui::Indent();
-        if (preset) {
-          ImGui::TextWrapped(_("Light only restyles buttons, tabs and headers. Windows and text keep the scheme's dark colors."));
-        } else {
-          ImGui::TextWrapped(_("Dark only restyles buttons, tabs and headers. Windows and text keep the scheme's light colors."));
-        }
-        if (ImGui::Button(fmt::sprintf(_("Load the %s preset##colTypeHint"),_(guiColorPresets[preset].name)).c_str())) {
-          askColorPreset(preset);
-        }
-        ImGui::Unindent();
-        return false;
-      },[this]{return settings.basicColors && colorSchemeMismatch();}),
+      ).Callback([this]{
+        applyUISettings(false);
+        // Dark/Light only restyles what basic mode derives from the accents;
+        // offer the matching preset when the windows are still the other way
+        if (colorSchemeMismatch()) askColorPreset(settings.guiColorsBase?1:0);
+      }) BASIC_MODE,
       SETTING_COLOR(GUI_COLOR_ACCENT_PRIMARY) BASIC_MODE,
       SETTING_COLOR(GUI_COLOR_ACCENT_SECONDARY) BASIC_MODE,
 #define GURU_MODE .Condition([this]{return !settings.basicColors;})

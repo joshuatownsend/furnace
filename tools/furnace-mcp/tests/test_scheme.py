@@ -1,5 +1,7 @@
 """Color schemes: the contrast check and the Light preset (ideas/007)."""
 
+import re
+
 from furnace_mcp import scheme
 
 
@@ -16,6 +18,14 @@ def test_light_preset_sets_every_color():
 def test_preset_header_is_up_to_date():
     # regenerate with: python -m furnace_mcp.scheme presets
     assert scheme.PRESET_HEADER.read_text(encoding="utf-8") == scheme.preset_header()
+
+
+def test_gui_checks_the_same_pairs():
+    # settings.cpp's drawContrastCheck and CONTRAST_PAIRS must list the same pairs
+    src = (scheme._REPO / "src" / "gui" / "settings.cpp").read_text(encoding="utf-8")
+    body = src[src.index("const ContrastPair pairs[]={"):]
+    cpp = re.findall(r"\{(GUI_COLOR_\w+),(GUI_COLOR_\w+),", body[:body.index("};")])
+    assert cpp == [(fg, layers[0]) for fg, layers in scheme.CONTRAST_PAIRS]
 
 
 def test_contrast_check_flags_unreadable_text():

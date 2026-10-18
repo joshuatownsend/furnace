@@ -133,6 +133,10 @@ def render(song, wav_path, per_channel=False, channels=None):
     channels, so the channel comes from the file name, not the position.
     channels (0-based) limits a per-channel render to those channels."""
     wav_path = Path(wav_path)
+    if per_channel:
+        # files from an earlier render under this name would come back as this one's
+        for f in wav_path.parent.glob(wav_path.stem + "_c*.wav"):
+            f.unlink()
     with tempfile.TemporaryDirectory() as td:
         src = Path(td) / "song.json"
         src.write_text(json.dumps(song), encoding="utf-8")

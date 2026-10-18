@@ -339,6 +339,9 @@ async def test_exportchans_renders_only_those_channels(tmp_path):
     # channels 2-5 are the operators of extended FM channel 3: they export as one file under 2
     files = fsong.render(song, tmp_path / "op.wav", per_channel=True, channels=[3, 4])
     assert [c for c, _ in files] == [2]
+    # a narrower render under a name used before returns only its own channels
+    files = fsong.render(song, tmp_path / "ch.wav", per_channel=True, channels=[9])
+    assert [c for c, _ in files] == [9]
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not on PATH")

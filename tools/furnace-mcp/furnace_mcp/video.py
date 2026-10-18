@@ -38,6 +38,15 @@ def parse_size(text):
     return width, height
 
 
+def find_ffmpeg(ffmpeg="ffmpeg"):
+    """Absolute path of ffmpeg (a name on PATH or a file path): it runs from a
+    temporary directory, where a relative path would point elsewhere."""
+    exe = shutil.which(ffmpeg) or (ffmpeg if Path(ffmpeg).is_file() else None)
+    if not exe:
+        raise FileNotFoundError(f"ffmpeg not found ({ffmpeg}); install it or pass its path")
+    return str(Path(exe).resolve())
+
+
 def layout(n, width, height, aspect=2.0):
     """(columns, rows) for n scopes: panels nearest `aspect` wide, then fewest empty cells."""
     best = None
@@ -198,9 +207,7 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
         raise ValueError(f"fps must be 1 to 240, not {fps}")
     if window_ms <= 0:
         raise ValueError("window_ms must be positive")
-    exe = shutil.which(ffmpeg) or (ffmpeg if Path(ffmpeg).is_file() else None)
-    if not exe:
-        raise FileNotFoundError(f"ffmpeg not found ({ffmpeg}); install it or pass its path")
+    exe = find_ffmpeg(ffmpeg)
     colors = colors or fscheme.current()
     out = Path(out).resolve()
     sub = fsong.subsong(song, sub_index)

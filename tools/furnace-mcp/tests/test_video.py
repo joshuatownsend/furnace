@@ -95,3 +95,15 @@ def test_scheme_file_overrides_only_its_keys(tmp_path):
     assert colors["GUI_COLOR_TEXT"] == (0, 0, 0, 1)
     assert colors["GUI_COLOR_BACKGROUND"] == scheme.defaults()["GUI_COLOR_BACKGROUND"]
     assert settings == {"configVersion": "232", "guiColorsBase": "1"}
+
+
+
+def test_ffmpeg_path_is_absolute(tmp_path, monkeypatch):
+    # ffmpeg runs from a temporary directory, so a relative path must be resolved first
+    fake = tmp_path / "bin" / "ffmpeg.exe"
+    fake.parent.mkdir()
+    fake.write_bytes(b"")
+    monkeypatch.chdir(tmp_path)
+    assert video.find_ffmpeg("bin/ffmpeg.exe") == str(fake.resolve())
+    with pytest.raises(FileNotFoundError):
+        video.find_ffmpeg("bin/nothing.exe")

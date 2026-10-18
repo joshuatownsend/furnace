@@ -99,3 +99,11 @@ these are useful editing tools to fine-tune the waveform:
 - **Double**: doubles the waveform's frequency by squashing it to half length then repeating it.
 - **Convert Signed/Unsigned**. worth trying if an imported wave sounds corrupted.
 - **Randomize**: generate a completely random waveform.
+
+### Harmonics
+
+this shows which harmonics (sine waves at whole multiples of the wave's pitch) make up the current waveform.
+- the bar graph shows the amplitude of each harmonic, from the 1st (the fundamental) on the left. a wave of length N has N/2 harmonics.
+- if the wave has more than 16 harmonics, the share of energy above the 16th is shown. the Shapes tab can only rebuild the first 16.
+- the table lists the amplitude and phase of each harmonic, in the same units as the Shapes tab's **Amplitude/Phase** sliders (1.000 is a full-height sine).
+- **Copy to Shapes**: sets the Shapes tab to a sine shape with these amplitudes and phases, so you can rebuild the wave there and change single harmonics. the wave itself only changes once you move a Shapes slider. if a harmonic is louder than 1.000 (a full-height square wave is), all of them are scaled down to fit.

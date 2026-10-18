@@ -23,6 +23,7 @@
 #include "plot_nolerp.h"
 #include "IconsFontAwesome4.h"
 #include "furIcons.h"
+#include "waveHarmonics.h"
 #include "misc/cpp/imgui_stdlib.h"
 #include <fmt/printf.h>
 #include <math.h>
@@ -1068,6 +1069,64 @@ void FurnaceGUI::drawWaveEdit() {
                     MARK_MODIFIED;
                   });
                   e->notifyWaveChange(curWave);
+                }
+                ImGui::EndTabItem();
+              }
+              if (ImGui::BeginTabItem(_("Harmonics"))) {
+                WaveHarmonics harm;
+                analyzeWaveHarmonics(wave->data,wave->len,wave->max,harm);
+                if (harm.count<1) {
+                  ImGui::TextWrapped(_("the wave is too short to analyze."));
+                } else {
+                  float harmPlot[WAVE_HARMONICS_MAX];
+                  float harmPeak=0.0f;
+                  for (int i=0; i<harm.count; i++) {
+                    harmPlot[i]=harm.amp[i];
+                    if (harm.amp[i]>harmPeak) harmPeak=harm.amp[i];
+                  }
+                  ImGui::PlotHistogram("##WGHarmPlot",harmPlot,harm.count,0,NULL,0.0f,MAX(harmPeak,0.01f),ImVec2(ImGui::GetContentRegionAvail().x,80.0f*dpiScale));
+                  if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(_("harmonics 1 to %d, left to right"),harm.count);
+                  }
+                  if (harm.count>16) {
+                    ImGui::Text(_("above harmonic 16: %.1f%% of the energy"),harm.energyAbove16*100.0f);
+                  }
+
+                  if (ImGui::Button(_("Copy to Shapes"))) {
+                    // amplitudes above 1 (e.g. a full-scale square) don't fit the sliders
+                    float scale=1.0f;
+                    for (int i=0; i<16 && i<harm.count; i++) {
+                      if (harm.amp[i]>scale) scale=harm.amp[i];
+                    }
+                    for (int i=0; i<16; i++) {
+                      waveGenAmp[i]=(i<harm.count)?(harm.amp[i]/scale):0.0f;
+                      waveGenPhase[i]=(i<harm.count)?harm.phase[i]:0.0f;
+                    }
+                    waveGenBaseShape=0;
+                    waveGenPower=1;
+                    waveGenInvertPoint=1.0f;
+                  }
+                  if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip(_("sets the Shapes tab to a sine base with these amplitudes and phases.\nthe wave is redrawn from harmonics 1-16 when you move a Shapes slider."));
+                  }
+
+                  if (ImGui::BeginTable("WGHarmTable",3,ImGuiTableFlags_ScrollY|ImGuiTableFlags_RowBg,ImVec2(0.0f,ImGui::GetContentRegionAvail().y))) {
+                    ImGui::TableSetupScrollFreeze(0,1);
+                    ImGui::TableSetupColumn(_("#"),ImGuiTableColumnFlags_WidthFixed);
+                    ImGui::TableSetupColumn(_("Amplitude"),ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableSetupColumn(_("Phase"),ImGuiTableColumnFlags_WidthStretch);
+                    ImGui::TableHeadersRow();
+                    for (int i=0; i<harm.count; i++) {
+                      ImGui::TableNextRow();
+                      ImGui::TableNextColumn();
+                      ImGui::Text("%d",i+1);
+                      ImGui::TableNextColumn();
+                      ImGui::Text("%.3f",harm.amp[i]);
+                      ImGui::TableNextColumn();
+                      ImGui::Text("%.3f",harm.phase[i]);
+                    }
+                    ImGui::EndTable();
+                  }
                 }
                 ImGui::EndTabItem();
               }

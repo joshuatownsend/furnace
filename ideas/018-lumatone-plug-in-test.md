@@ -75,7 +75,7 @@ How it behaves:
 - **Hex typing gotcha**: if **Value input style** is set to one of the three key-based styles and the cursor is on an instrument, volume or effect column, keys type hex digits instead of notes (`gui.cpp:5287`, `:5297–5316`). Keep the cursor on the note column, or leave the style on "Disabled/custom".
 - **Aftertouch, pitch bend and other messages are ignored** unless bound with MIDI learn (`playback.cpp:2982–3031` only handles note on, note off and program change).
 - **No detune or microtonal path.** A recorded note writes the note, instrument, volume and a latched effect, nothing else (`gui.cpp:1718–1737`). The only song-wide tuning is **Tuning (A-4)** in Song Info (`src/gui/songInfo.cpp:100`, `src/engine/song.h:312`). `E5xx` is "set pitch": `00` is one semitone down, `80` is normal, `FF` is nearly one semitone up (`doc/3-pattern/effects.md:30`).
-- **MIDI output to the Lumatone exists but can't drive its lights.** **MIDI output** has "Off", "Melodic" and "Light Show (use for Launchpad)" (`allSettings.cpp:1456–1490`), but only Melodic does anything in the engine (`playback.cpp:405`). Furnace sends no sysex.
+- **MIDI output to the Lumatone exists but can't drive its lights.** **MIDI output** has "Off", "Melodic" and "Light Show (use for Launchpad)" (`allSettings.cpp:1456–1490`), but only Melodic does anything in the engine (`playback.cpp:405`). Furnace sends a little sysex (MIDI time code, `engine.cpp:1997-2058`, and a TX81Z voice request, `doAction.cpp:217-226`), but nothing that sets key lights.
 
 ## Trade-offs and risks
 
@@ -154,7 +154,7 @@ Read the results like this:
   - If step 7 shows duplicate keys cutting each other off, the import must also solve note release per key, not just pitch.
   - If direct mode (step 8) is useless with every factory preset, idea 19 should bring its own channel meaning rather than reuse "direct channels".
 - **Idea 20 (key lights follow the song)**
-  - If step 12 shows nothing, it needs new sysex output code; Furnace sends none today and Light Show mode is empty. Size it M or larger.
+  - If step 12 shows nothing, it needs new light-command output code; Furnace sends no light sysex today and Light Show mode is empty (see brief 020). Size it M or larger.
   - If Michael doesn't care about lights (step 13), park it.
 - **Idea 21 (tuning tables)**
   - Only advance if Michael wants microtonal music. Today the only tuning control is one A-4 reference per song.

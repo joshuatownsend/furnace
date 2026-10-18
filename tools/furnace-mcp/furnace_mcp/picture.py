@@ -84,23 +84,27 @@ def _clock(t, step):
     return f"{int(t) // 60}:{int(t) % 60:02d}"
 
 
-def _columns(x, w):
-    """(top, bottom, clipped) per pixel column of samples x (frames x outputs)."""
+def _columns(x, w, clip=CLIP):
+    """(top, bottom, clipped) per pixel column of samples x (frames x outputs).
+    clip: the level counted as full scale, or a mask with one flag per sample
+    (a sample's own clipping test, analysis.clipped_mask, which skips lone peaks)."""
     hi, lo = x.max(axis=1), x.min(axis=1)
     edges = np.linspace(0, len(hi), w + 1).astype(int)
     edges = np.minimum(edges, len(hi) - 1)
     top = np.maximum.reduceat(hi, edges[:-1])
     bot = np.minimum.reduceat(lo, edges[:-1])
-    return top, bot, np.maximum(top, -bot) >= CLIP
+    if isinstance(clip, np.ndarray):
+        return top, bot, np.logical_or.reduceat(clip, edges[:-1])
+    return top, bot, np.maximum(top, -bot) >= clip
 
 
-def _draw_wave(img, x0, y0, w, h, x, color):
+def _draw_wave(img, x0, y0, w, h, x, color, clip=CLIP):
     img[y0:y0 + h, x0:x0 + w] = _PANEL
     mid = y0 + (h - 1) / 2
     img[int(round(mid)), x0:x0 + w] = _GUIDE
     if not len(x):
         return 0.0
-    top, bot, clipped = _columns(x, w)
+    top, bot, clipped = _columns(x, w, clip)
     half = (h - 2) / 2
     y_top = np.clip(np.round(mid - top * half), y0, y0 + h - 1).astype(int)
     y_bot = np.clip(np.round(mid - bot * half), y0, y0 + h - 1).astype(int)
@@ -308,15 +312,20 @@ def draw_note(wav, on, off, f0, report, out_png, *, width=1200, ffmpeg="ffmpeg")
     texts.append((6, y + 4, "whole note", 13, _TEXT))
     for t, name in ((on, "note on"), (off, "note off")):
         _mark(img, texts, left + int(min(max(t / total, 0.0), 1.0) * (pw - 1)), y, y + whole_h, name)
-    for _, t in shots:  # red ticks: where the close-ups are taken
-        _mark(img, texts, left + int(min(max(t / total, 0.0), 1.0) * (pw - 1)), y + whole_h - 10, y + whole_h, "", _CLIPPED)
+    # numbered red ticks: where each close-up below is taken
+    for k, (_, t) in enumerate(shots):
+        tx = left + int(min(max(t / total, 0.0), 1.0) * (pw - 1))
+        _mark(img, texts, tx, y + whole_h - 14, y + whole_h, "", _CLIPPED)
+        texts.append((tx + 3, y + whole_h - 15, str(k + 1), 11, _TEXT))
+    texts.append((6, y + 22, "red ticks:", 11, _DIM_TEXT))
+    texts.append((6, y + 36, "close-ups 1-3", 11, _DIM_TEXT))
     step = _ticks(total, pw)
     t = 0.0
     while t <= total + 1e-9:
         texts.append((left + int(min(max(t / total, 0.0), 1.0) * (pw - 1)), y + whole_h + 2, _clock(t, step), 11, _DIM_TEXT))
         t += step
     y += whole_h + 18
-    for name, t in shots:
+    for k, (name, t) in enumerate(shots):
         a = min(max(int(t * rate), 0), max(len(x) - span, 0))
         seg = x[a:a + span]
         peak = float(np.abs(seg).max()) if len(seg) else 0.0
@@ -324,8 +333,10 @@ def draw_note(wav, on, off, f0, report, out_png, *, width=1200, ffmpeg="ffmpeg")
         # quiet sustain would otherwise be a flat line
         gain = 0.9 / peak if peak > 1e-4 else 1.0
         _draw_wave(img, left, y, pw, shot_h, _stretch(seg * gain, pw), _WAVE)
-        texts.append((6, y + 4, name, 12, _TEXT))
-        texts.append((6, y + 20, "4 cycles", 11, _DIM_TEXT))
+        texts.append((6, y + 4, f"{k + 1} {name}", 12, _TEXT))
+        # the window is 4 periods of the note played; an arp or a pitch macro can
+        # put more (or fewer) cycles in it
+        texts.append((6, y + 20, f"{span / rate * 1000:.1f} ms", 11, _DIM_TEXT))
         texts.append((6, y + 36, f"peak {20 * np.log10(max(peak, 1e-9)):.1f} dB", 11, _DIM_TEXT))
         texts.append((6, y + 52, "scaled to fit", 11, _DIM_TEXT))
         y += shot_h + gap
@@ -355,11 +366,13 @@ def _loop_seam(x, loop, k=48):
     return np.concatenate([first, second]), len(first), title, note
 
 
-def draw_sample(x, loop, span, out_png, *, width=1200, ffmpeg="ffmpeg"):
+def draw_sample(x, loop, span, out_png, *, clipped=None, width=1200, ffmpeg="ffmpeg"):
     """Picture of a sample (floats, one channel): the whole sample with the part
     measured shaded and the loop points marked, then a close-up of the loop seam
     (the end of the loop joined to its start, as it plays: a jump there clicks),
-    or of the start of the measured part when there is no loop."""
+    or of the start of the measured part when there is no loop. clipped: one flag
+    per sample, from analysis.clipped_mask, so the picture marks exactly what the
+    text reports (default: anything at 16-bit full scale)."""
     exe = find_ffmpeg(ffmpeg)
     x = np.asarray(x, np.float32).reshape(-1, 1)
     n = max(len(x), 1)
@@ -370,7 +383,8 @@ def draw_sample(x, loop, span, out_png, *, width=1200, ffmpeg="ffmpeg"):
     texts = []
     y = gap
     a, b = span
-    _draw_wave(img, left, y, pw, whole_h, x, _MIX)
+    clip = CLIP if clipped is None else np.asarray(clipped, bool)
+    _draw_wave(img, left, y, pw, whole_h, x, _MIX, clip)
     xa, xb = left + int(a / n * (pw - 1)), left + int(b / n * (pw - 1))
     shade = img[y:y + whole_h, xa:xb + 1]
     shade[:] = (shade * 0.7 + np.array(_WAVE) * 0.3).astype(np.uint8)
@@ -387,11 +401,15 @@ def draw_sample(x, loop, span, out_png, *, width=1200, ffmpeg="ffmpeg"):
     y += whole_h + 18
     if loop:
         seam, cut, title, note = _loop_seam(x, loop)
+        seam_clip = clip if clipped is None else _loop_seam(clip.reshape(-1, 1), loop)[0][:, 0]
     else:
         seam, cut = x[a:a + 96], None
+        seam_clip = clip if clipped is None else clip[a:a + 96]
         title, note = "measured part", f"samples {a}-{a + len(seam)}"
     if len(seam) >= 2:
-        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE)
+        if isinstance(seam_clip, np.ndarray):  # follow the close-up's resampling
+            seam_clip = seam_clip[np.round(np.linspace(0, len(seam) - 1, pw * 4)).astype(int)]
+        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE, seam_clip)
         if cut:
             _mark(img, texts, left + int(cut / len(seam) * (pw - 1)), y, y + close_h, "", _CLIPPED)
     texts.append((6, y + 4, title, 13, _TEXT))

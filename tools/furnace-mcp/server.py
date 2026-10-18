@@ -16,6 +16,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import numpy as np
+
 from mcp.server import MCPServer
 from mcp.server.mcpserver import Image
 from mcp.server.mcpserver.exceptions import ToolError
@@ -502,16 +504,26 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
                      + (" (low: check by ear)" if det["confidence"] < 0.7 else ""))
         lines.append(f"tune_sample would set the center rate to {t['new_rate']} Hz: a written C-4 "
                      f"then plays {notation.note_name(108 + t['target_semitones'])}")
+    x = fsong.sample_pcm(smp)
+    level = analysis.full_scale(smp.get("depth"))
+    clip_mask = analysis.clipped_mask(x, level)
+    at = np.flatnonzero(clip_mask)
+    clipped = len(at)
+    if clipped:
+        lines.append(f"clipping: {clipped} samples sit flat at full scale ({100 * clipped / len(x):.1f}% "
+                     f"of the sample, between samples {at[0]} and {at[-1]}). Unless it's a "
+                     "square wave drawn at full scale, that's clipping in the recording, "
+                     "which sounds harsh whatever the volume")
     lines.append(_sample_users(s, sample))
     if not image:
         return "\n".join(lines)
-    x = fsong.sample_pcm(smp)
     loop = fsong.sample_loop(smp)
     _, region = analysis.sample_segment(x, loop)
     m = re.search(r"(\d+)-(\d+)", region)  # "the loop (a-b)" or "samples a-b"
     span = (int(m.group(1)), int(m.group(2))) if m else (0, len(x))
     tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
-    png = picture.draw_sample(x, loop, span, _render_dir() / f"{p.stem}_{tag}_smp{sample:02X}.png")
+    png = picture.draw_sample(x, loop, span, _render_dir() / f"{p.stem}_{tag}_smp{sample:02X}.png",
+                              clipped=clip_mask)
     lines.append(f"image: {png}")
     return ["\n".join(lines), Image(path=png)]
 
@@ -554,12 +566,26 @@ def tune_sample(sample: int, c4_plays: str = "", path: str = "") -> str:
     return "\n".join(lines) + note
 
 
+def _output(output):
+    """The absolute path to write to. Its folder must exist: furnace and ffmpeg
+    would fail on it later with an error that doesn't say so. On Windows the
+    Desktop is often under OneDrive, so suggest that one."""
+    out = Path(output).expanduser().resolve()
+    if not out.parent.is_dir():
+        hint = ""
+        onedrive = Path.home() / "OneDrive" / out.parent.name
+        if out.parent.parent == Path.home() and onedrive.is_dir():
+            hint = f"; did you mean {onedrive / out.name}?"
+        raise FileNotFoundError(f"folder {out.parent} doesn't exist{hint}")
+    return out
+
+
 @_tool(_EDIT)
 def export(output: str, format: str = "", path: str = "") -> str:
     """Export the song. format: fur, json, vgm, s98, wav, txt (default: from the
     output extension). Writes output; does not change the song."""
     p = _path(path)
-    out = Path(output).expanduser().resolve()
+    out = _output(output)
     fmt = (format or out.suffix.lstrip(".")).lower()
     flags = {"fur": "-furout", "json": "-jsonout", "vgm": "-vgmout", "s98": "-s98out",
              "wav": "-output", "txt": "-txtout"}
@@ -587,7 +613,7 @@ def export_video(output: str, order_start: int = 0, order_end: int | None = None
     right. It skips drawing and encoding every frame, so check the layout and
     colors with it before the full video."""
     p = _path(path)
-    out = Path(output).expanduser().resolve()
+    out = _output(output)
     if out.suffix.lower() != ".mp4":
         raise ValueError("output must be an .mp4 file")
     width, height = video.parse_size(size)

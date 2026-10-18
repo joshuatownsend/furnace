@@ -402,6 +402,30 @@ def _holds_cycles(body):
     return len(dips) > 0 and dips[0] + 2 <= n * 2 / 3
 
 
+def full_scale(depth):
+    """The largest level a sample of this bit depth reaches (as sample_pcm scales
+    it): 8-bit audio tops out at 127/128 one way and -1 the other."""
+    return 127 / 128 if depth == 8 else 32767 / 32768
+
+
+def clipped_mask(x, level):
+    """Which samples of x sit at full scale next to another one on the same rail:
+    flat tops, the mark of clipping. A lone peak isn't one, and neither is a jump
+    straight from one rail to the other."""
+    x = np.asarray(x)
+    if len(x) < 2:
+        return np.zeros(len(x), bool)
+    # PCM is asymmetric: the negative rail is -1 (-128/128, -32768/32768)
+    pos, neg = x >= level - 1e-6, x <= -1 + 1e-6
+    pair = (pos[1:] & pos[:-1]) | (neg[1:] & neg[:-1])
+    return np.r_[pair, False] | np.r_[False, pair]
+
+
+def clipped_runs(x, level):
+    """How many samples of x are clipped (see clipped_mask)."""
+    return int(clipped_mask(x, level).sum())
+
+
 def sample_segment(x, loop=None):
     """The steady part of a sample to measure: (audio, description).
 

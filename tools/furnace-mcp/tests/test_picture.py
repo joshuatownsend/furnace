@@ -137,3 +137,20 @@ def test_note_picture_with_a_short_hold_and_no_release(tmp_path):
     # note on at 0.1 s, off at the very end: one row held, no release rendered
     out = picture.draw_note(tmp_path / "n.wav", 0.1, 0.2, 262.0, {}, tmp_path / "n.png")
     assert out.read_bytes()[:4] == b"\x89PNG"
+
+
+def test_clipped_runs_count_flat_tops_only():
+    from furnace_mcp import analysis
+    level = analysis.full_scale(8)
+    x = np.zeros(100)
+    x[10] = level  # a lone peak at full scale: not clipping
+    x[50:54] = -1.0  # a flat top
+    assert analysis.clipped_runs(x, level) == 4
+    alt = np.tile([level, -1.0], 50)  # straight from rail to rail: no flat top
+    assert analysis.clipped_runs(alt, level) == 0
+    assert analysis.clipped_runs(np.full(10, -127 / 128), level) == 0  # the rail is -128
+    lone = np.zeros(100)
+    lone[30] = level  # a lone peak: the text doesn't count it, so the picture mustn't mark it
+    _, _, clipped = picture._columns(lone.reshape(-1, 1), 10, analysis.clipped_mask(lone, level))
+    assert not clipped.any()
+    assert level == 127 / 128 and analysis.full_scale(16) == 32767 / 32768

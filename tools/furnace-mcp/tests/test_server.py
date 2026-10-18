@@ -315,6 +315,23 @@ async def test_channels_come_from_furnace():
     assert len(chans) == 13
 
 
+async def test_info_names_channels_from_the_sub_song_asked_for(tmp_path):
+    song = fsong.load(DEMO)
+    second = json.loads(json.dumps(song["subsongs"][0]))
+    second["channelData"][0]["name"] = "Lead"
+    song["subsongs"].append(second)
+    src = tmp_path / "two.json"
+    src.write_text(json.dumps(song), encoding="utf-8")
+    assert "- 0: FM 1 [type 0]" in fsong.run(["-info", src])
+    assert "- 0: Lead [type 0]" in fsong.run(["-info", "-subsong", 1, src])
+
+
+async def test_exportchans_rejects_channels_the_song_lacks(tmp_path):
+    with pytest.raises(fsong.FurnaceError, match="has 13 channels"):
+        fsong.render(fsong.excerpt(fsong.load(DEMO), 0, 0, 0), tmp_path / "x.wav",
+                     per_channel=True, channels=[13])
+
+
 async def test_exportchans_renders_only_those_channels(tmp_path):
     song = fsong.excerpt(fsong.load(DEMO), 0, 2, 2)
     files = fsong.render(song, tmp_path / "ch.wav", per_channel=True, channels=[0, 9])

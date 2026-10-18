@@ -2761,7 +2761,10 @@ void DivEngine::dumpSongInfo(int subSongIndex) {
   // of them as one file, named after the first)
   printf("\nCHANNELS\n");
   for (int i=0; i<song.chans; i++) {
-    printf("- %d: %s [type %d]\n",i,getChannelName(i),getChannelType(i));
+    // custom names belong to a sub-song: the one asked for, not curSubSong
+    String name=(timedSubSong!=NULL)?timedSubSong->chanName[i]:"";
+    if (name.empty()) name=(song.dispatchChanOfChan[i]<0)?"??":song.chanDef[i].name;
+    printf("- %d: %s [type %d]\n",i,name.c_str(),getChannelType(i));
   }
 }
 

@@ -309,6 +309,12 @@ def test_save_stages_next_to_the_song(demo, monkeypatch):
 
 
 
+async def test_channels_come_from_furnace():
+    chans = fsong.channels(fsong.load(DEMO))
+    assert chans[2] == ("FM 3 OP1", fsong.EXT_OPERATOR) and chans[9] == ("Square 1", 1)
+    assert len(chans) == 13
+
+
 async def test_exportchans_renders_only_those_channels(tmp_path):
     song = fsong.excerpt(fsong.load(DEMO), 0, 2, 2)
     files = fsong.render(song, tmp_path / "ch.wav", per_channel=True, channels=[0, 9])
@@ -325,7 +331,8 @@ async def test_export_video(demo, tmp_path):
         msg = text(await c.call_tool("export_video", {
             "path": demo, "output": str(out), "order_start": 2, "order_end": 2,
             "size": "320x180", "fps": 10, "color": "channel"}))
-    assert "SN76489 #1" in msg and "YM2612 #1" in msg, msg
+    # Furnace's own channel names; the extended channel's four operators are one scope
+    assert "Square 1" in msg and "FM 1" in msg and "OP" not in msg, msg
     probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height",
                             "-of", "csv=p=0", str(out)], capture_output=True, text=True, check=True)
     assert probe.stdout.split() == ["h264,320,180", "aac"]

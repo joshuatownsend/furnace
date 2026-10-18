@@ -11,6 +11,7 @@ import argparse
 import math
 import os
 import queue
+import re
 import shutil
 import subprocess
 import tempfile
@@ -126,11 +127,20 @@ class Scope:
         self.edges = rising_edges(samples, 0.1 * self.peak)
 
 
-def _shown_channels(song, sub_index):
-    """Channels not hidden from Furnace's Channel Oscilloscope."""
+def _export_units(song, sub_index, types):
+    """The channels to export: those not hidden from Furnace's Channel Oscilloscope.
+    An extended FM channel's operators export as one file under the first of them,
+    so a run of operators counts once, as its first."""
     data = fsong.subsong(song, sub_index).get("channelData") or []
-    return [ch for ch in range(len(fsong.channel_labels(song)))
-            if ch >= len(data) or (data[ch].get("show") or {}).get("chanOsc", True)]
+    units = set()
+    for ch in range(len(types)):
+        if ch < len(data) and not (data[ch].get("show") or {}).get("chanOsc", True):
+            continue
+        head = ch
+        while head > 0 and types[head] == fsong.EXT_OPERATOR and types[head - 1] == fsong.EXT_OPERATOR:
+            head -= 1
+        units.add(head)
+    return sorted(units)
 
 
 def _render(song, channels, workdir):
@@ -142,14 +152,11 @@ def _render(song, channels, workdir):
         mix = pool.submit(fsong.render, song, workdir / "mix.wav")
         parts = pool.map(lambda k: fsong.render(song, workdir / f"g{k}.wav", per_channel=True,
                                                 channels=groups[k]), range(workers))
-        # an extended channel's operators come back as one file under the first
-        # operator, from each group that asked for one of them: keep one
-        files = sorted(dict(f for part in parts for f in part).items())
+        files = sorted(f for part in parts for f in part)
         return mix.result()[0][1], files
 
 
-def _channel_scopes(song, files, colors, color_mode, sub_index):
-    labels = fsong.channel_labels(song)
+def _channel_scopes(song, files, colors, color_mode, sub_index, chans):
     data = (fsong.subsong(song, sub_index).get("channelData") or [])
     chip_of = [ci for ci, chip in enumerate(song.get("chips") or []) for _ in range(chip.get("channels", 0))]
     palette = [colors[f"GUI_COLOR_MULTI_INS_{k}"] for k in range(1, 8)]
@@ -157,7 +164,9 @@ def _channel_scopes(song, files, colors, color_mode, sub_index):
     for ch, path in files:
         cd = data[ch] if ch < len(data) else {}
         x, rate = read_wav(path)
-        mono = x.mean(axis=1)
+        # the loudest output, not the average: outputs in antiphase (SNES and
+        # SID3 can invert one side) would cancel out
+        mono = x[:, int(np.argmax(np.square(x).sum(axis=0)))].copy()
         if np.ptp(mono) < SILENT:
             continue  # silent, or a constant offset (nothing to draw)
         if color_mode == "channel":
@@ -166,7 +175,9 @@ def _channel_scopes(song, files, colors, color_mode, sub_index):
                      else palette[chip_of[ch] % len(palette)] if ch < len(chip_of) else palette[0])
         else:
             color = colors["GUI_COLOR_OSC_WAVE"]
-        label = cd.get("name") or (labels[ch] if ch < len(labels) else f"ch{ch}")
+        name, kind = chans[ch] if ch < len(chans) else (f"ch{ch}", 0)
+        # an operator run's file is the whole extended channel: "FM 3 OP1" -> "FM 3"
+        label = re.sub(r"\s*OP\d+$", "", name) if kind == fsong.EXT_OPERATOR else name
         scopes.append(Scope(label, mono, color))
     return scopes, rate
 
@@ -198,11 +209,12 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
 
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
-        shown = _shown_channels(song, sub_index)
-        if not shown:
+        chans = fsong.channels(ex)
+        units = _export_units(song, sub_index, [kind for _, kind in chans])
+        if not units:
             raise ValueError("every channel is hidden from the Channel Oscilloscope")
-        mix, files = _render(ex, shown, td)
-        scopes, rate = _channel_scopes(song, files, colors, color_mode, sub_index)
+        mix, files = _render(ex, units, td)
+        scopes, rate = _channel_scopes(song, files, colors, color_mode, sub_index, chans)
         if not scopes:
             raise ValueError("every channel is silent in that range; nothing to draw")
         nsamp = min(len(s.x) for s in scopes)

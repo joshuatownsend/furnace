@@ -450,3 +450,18 @@ async def test_tune_sample_refuses_no_pitch_and_other_depths(ibiza):
     assert not Path(ibiza).with_name("ibiza.bak.fur").exists()
     assert brr.is_error and "depth 9 (BRR)" in brr.content[0].text
     assert missing.is_error and "out of range" in missing.content[0].text
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
+async def test_render_image(demo):
+    async with Client(mcp) as c:
+        res = await c.call_tool("render", {"path": demo, "order_start": 1, "order_end": 2, "image": True})
+    assert not res.is_error, res.content
+    kinds = [type(x).__name__ for x in res.content]
+    assert kinds == ["TextContent", "ImageContent"], kinds
+    assert res.content[1].mime_type == "image/png"
+    report = res.content[0].text
+    png = Path(report.split("image: ")[1].splitlines()[0])
+    assert png.is_file() and png.suffix == ".png"
+    # the image needs per-channel renders, but their text reports come only with per_channel
+    assert not any(line.startswith("ch") for line in report.splitlines()), report

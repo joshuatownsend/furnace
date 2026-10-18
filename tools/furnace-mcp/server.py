@@ -16,10 +16,11 @@ import time
 from pathlib import Path
 
 from mcp.server import MCPServer
+from mcp.server.mcpserver import Image
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from furnace_mcp import analysis, notation, scheme as fscheme, song as fsong, video
+from furnace_mcp import analysis, notation, picture, scheme as fscheme, song as fsong, video
 
 mcp = MCPServer(
     "furnace",
@@ -313,10 +314,15 @@ def write_instrument(instrument: int, changes: dict, replace: bool = False, path
 
 @_tool(_READ)
 def render(order_start: int = 0, order_end: int | None = None,
-           per_channel: bool = False, subsong: int = 0, path: str = "") -> str:
+           per_channel: bool = False, image: bool = False, subsong: int = 0, path: str = ""):
     """Render orders order_start..order_end (inclusive; default the whole song, which
     is slow for long songs) to WAV and return a listen report: loudness, clipping,
     silence, spectral centroid and band energy. per_channel adds one report per channel.
+    image adds a picture (needs ffmpeg; costs about 1-2k tokens): the mix waveform,
+    a spectrogram under it, then one waveform per audible channel on a shared scale
+    (full scale fills a row, so quiet looks quiet), clipped columns in red, and a
+    line at each order labelled in hex. Use it for where things happen and what
+    they look like; take exact numbers from the text.
     Note: effects that jump outside the range, or state set before order_start, may
     sound different in an excerpt."""
     p = _path(path)
@@ -329,19 +335,26 @@ def render(order_start: int = 0, order_end: int | None = None,
     out = _render_dir() / f"{p.stem}_{tag}_s{subsong}_o{order_start:02X}-{end:02X}.wav"
     (_, wav), = fsong.render(ex, out)
     lines = [f"wav: {wav}", analysis.format_report("mix", analysis.analyze(wav))]
-    if per_channel:
+    if per_channel or image:
         chdir = out.with_name(out.stem + "_ch")
         shutil.rmtree(chdir, ignore_errors=True)
         chdir.mkdir()
         labels = fsong.channel_labels(s)
         files = fsong.render(ex, chdir / "ch.wav", per_channel=True)
-        for i, f in files:
-            label = labels[i] if i < len(labels) else ""
-            lines.append(analysis.format_report(f"ch{i} {label}", analysis.analyze(f)))
+        named = [(f"ch{i} {labels[i] if i < len(labels) else ''}".strip(), f) for i, f in files]
+        if per_channel:
+            lines += [analysis.format_report(name, analysis.analyze(f)) for name, f in named]
         missing = sorted(set(range(len(labels))) - {i for i, _ in files})
         if missing:
             lines.append("not rendered separately: " + ", ".join(f"ch{i}" for i in missing))
-    return "\n".join(lines)
+    if not image:
+        return "\n".join(lines)
+    starts, _ = picture.order_starts(ex)
+    pic = picture.draw(wav, named, starts, out.with_suffix(".png"), first_order=order_start)
+    lines.append(f"image: {pic['path']}")
+    if pic["silent"]:
+        lines.append("silent, not drawn: " + ", ".join(pic["silent"]))
+    return ["\n".join(lines), Image(path=pic["path"])]
 
 
 @_tool(_READ)

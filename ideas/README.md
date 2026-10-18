@@ -16,11 +16,14 @@ Fork goal (maintainer, 2026-10-15): **personal fork**. Upstream acceptance doesn
 | 005 | Detect sample pitch automatically | Validate | 6/10 | inside-out | S–M | SELECTED (spike brief) | [005-sample-pitch-detect.md](005-sample-pitch-detect.md) |
 | 006 | Write new chip emulators with Claude (recipe + pilot chip) | Validate | 8/10 | both | M, then M–L per chip | DONE (spike merged to master as #6, `f5ed7676e`, 2026-10-17; Bally Astrocade is the first fork chip; recipe in [chip-recipe.md](chip-recipe.md); Josh checked the GUI) | [006-chip-emulators-with-claude.md](006-chip-emulators-with-claude.md) |
 | 007 | Color themes and a Perfect Palette link | Advance | 7/10 (estimate) | both | S–M | DONE (merged to master as #11, `60c41d0bb`, 2026-10-18: Dark/Light presets and a contrast check in Settings > Color; the Dark/Light radio offers the matching preset. Open: Perfect Palette export and an in-app link are Josh's call; three checker-coverage follow-ups listed in the brief) | [007-color-themes.md](007-color-themes.md) |
+| 009 | Editor quality-of-life bundle | Validate | 5/10 (estimate) | outside-in | S each | PARTLY DONE (2026-10-18): Harmonics tab in the wave editor (#987). #2911 and the mixed stereo scope (#1146) already exist as settings ("Don't scroll when moving cursor", Oscilloscope > Mono). Skipped: per-channel stereo scope (every chip driver), detachable windows (large), Ctrl+scroll (unclear), two-note arp #886 (changes playback; needs a song flag) | — |
 | 014 | Oscilloscope video export | Advance | 7/10 (estimate) | outside-in | M | DONE (merged to master as #10, `ec521e616`, 2026-10-18: `export_video` in furnace-mcp, `-exportchans` and a CHANNELS section in `-info`. Open: Michael hasn't seen it yet) | [014-oscilloscope-video-export.md](014-oscilloscope-video-export.md) |
+| 018 | Lumatone plug-in test with today's MIDI settings | Advance | 8/10 (estimate) | both | S, no code | BRIEF WRITTEN (2026-10-18): a checklist for Michael and his keyboard | [018-lumatone-plug-in-test.md](018-lumatone-plug-in-test.md) |
+| 019 | Lumatone layout import and microtonal input | Advance | 7/10 (estimate) | both | M | BRIEF WRITTEN (2026-10-18): spike steps 1-4 need no one; 5-7 need Michael after 018 | [019-lumatone-layout-microtonal-input.md](019-lumatone-layout-microtonal-input.md) |
 
 Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001 to 004, 006, 007 and 014 are merged. 014 builds on 002 and takes colors from 007.
 
-Ideas 008–013 and 015–021 (community demand, a comparison with other trackers, and Michael's Lumatone keyboard, added 2026-10-17) have no brief files yet. See the review page for them.
+Ideas 008, 010–013, 015–017, 020 and 021 (community demand, a comparison with other trackers, and Michael's Lumatone keyboard, added 2026-10-17) have no brief files yet. See the review page for them.
 
 ## Parked ideas
 

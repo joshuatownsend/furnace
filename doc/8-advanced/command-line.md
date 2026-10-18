@@ -81,6 +81,10 @@ the following parameters may be used:
   - `one`: single file (default)
   - `persys`: one file per chip (`_sXX` will be appended to file name, where `XX` is the chip number)
   - `perchan`: one file per channel (`_cXX` will be appended to file name, where `XX` is the channel number)
+- `-exportchans list`: with `-outmode perchan`, export only these channels, numbered from 1 like the `_cXX` files (for example `1-4,7`).
+  - this option has no short form.
+  - asking for any operator of an extended FM channel exports that channel's single file, named after its first operator.
+  - fails if the list names a channel the song doesn't have.
 
 **VGM export**
 

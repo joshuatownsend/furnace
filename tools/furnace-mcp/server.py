@@ -428,6 +428,9 @@ def _plays(t):
 
 
 def _octave_advice(semis):
+    if semis % 12:
+        return (f"notes sound {abs(semis)} semitones {'up' if semis > 0 else 'down'} from how "
+                "they're written")
     octs = semis // 12
     if not octs:
         return "notes play as written"

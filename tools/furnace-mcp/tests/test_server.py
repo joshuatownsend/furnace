@@ -434,7 +434,10 @@ async def test_tune_sample_8bit_and_again(tmp_path):
         # transposed: a written C-4 sounds C-3, at half the rate
         down = text(await c.call_tool("tune_sample", {"path": str(p), "sample": 3, "c4_plays": "C-3"}))
         assert "14687 -> 7343 Hz" in down and "1 octave down" in down, down
-    assert fsong.load(p)["samples"][3]["centerRate"] == 7343
+        # a note that isn't a C transposes by semitones
+        up = text(await c.call_tool("tune_sample", {"path": str(p), "sample": 3, "c4_plays": "E-3"}))
+        assert "7343 -> 9252 Hz" in up and "8 semitones down" in up, up  # E-3 is 8 below C-4
+    assert fsong.load(p)["samples"][3]["centerRate"] == 9252
 
 
 async def test_tune_sample_refuses_no_pitch_and_other_depths(ibiza):

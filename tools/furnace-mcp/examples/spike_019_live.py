@@ -108,7 +108,9 @@ def over_song(out):
                       f"on {round(0.5 / TICK)} {ch} {note} 127\noff {round(1.0 / TICK)} {ch} {note}\n")
     c4 = note_hz(parse_note("C-4"))
     print("\nkey B over a song (channel 1):")
-    for label, second, want in (("no E5xx", [], 12.5), ("E5C0", [{"code": 0xE5, "value": 0xC0}], 50)):
+    # E5B2 is B's own detune: the song asked for it, so it must stay
+    for label, second, want in (("no E5xx", [], 12.5), ("E5C0", [{"code": 0xE5, "value": 0xC0}], 50),
+                                ("E5B2", [{"code": 0xE5, "value": 0xB2}], 39.1)):
         song = blank_song()
         rows = song["subsongs"][0]["patterns"][0][0]["rows"]
         rows[0] = {"note": parse_note("C-4"), "ins": 0, "effects": [{"code": 0xE5, "value": 0x90}]}

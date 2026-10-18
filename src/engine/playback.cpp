@@ -1457,6 +1457,9 @@ void DivEngine::processRow(int i, bool afterDelay) {
         break;
       case 0xe5: // pitch
         chan[i].pitch=effectVal-0x80;
+        // fork prototype (ideas/019): the song set its own pitch, so there's
+        // nothing to restore after a live key
+        chan[i].livePitchSaved=DIV_NO_PITCH;
         // send pitch now
         dispatchCmd(DivCommand(DIV_CMD_PITCH,i,chan[i].pitch+(((chan[i].vibratoDepth*vibTable[chan[i].vibratoPos]*chan[i].vibratoFine)>>4)/15)));
         dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,i,chan[i].pitch));
@@ -1661,11 +1664,10 @@ void DivEngine::processRow(int i, bool afterDelay) {
   // commit note on
   if (chan[i].doNote) {
     // fork prototype (ideas/019): a pattern note after a live microtonal key
-    // gets the song's pitch back, unless this row set a new one (E5xx)
+    // gets the song's pitch back (an E5xx since then cleared livePitchSaved)
     if (chan[i].livePitchSaved!=DIV_NO_PITCH) {
-      if (chan[i].pitch==chan[i].livePitchSet) chan[i].pitch=chan[i].livePitchSaved;
+      chan[i].pitch=chan[i].livePitchSaved;
       chan[i].livePitchSaved=DIV_NO_PITCH;
-      chan[i].livePitchSet=DIV_NO_PITCH;
     }
     // COMPAT FLAG: continuous vibrato
     // - when enabled, the vibrato position is not reset on each note
@@ -2200,7 +2202,6 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
         if (chan[note.channel].livePitchSaved==DIV_NO_PITCH) {
           chan[note.channel].livePitchSaved=chan[note.channel].pitch;
         }
-        chan[note.channel].livePitchSet=note.pitch;
         chan[note.channel].pitch=note.pitch;
         dispatchCmd(DivCommand(DIV_CMD_PITCH,note.channel,chan[note.channel].pitch+(((chan[note.channel].vibratoDepth*vibTable[chan[note.channel].vibratoPos]*chan[note.channel].vibratoFine)>>4)/15)));
         dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,note.channel,chan[note.channel].pitch));

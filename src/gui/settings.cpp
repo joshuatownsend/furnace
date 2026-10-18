@@ -577,7 +577,7 @@ void FurnaceGUI::drawContrastCheck() {
     {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_IMGUI_HEADER,ImGuiCol_Header),styleBg(GUI_COLOR_IMGUI_HEADER_HOVER,ImGuiCol_HeaderHovered),styleBg(GUI_COLOR_IMGUI_HEADER_ACTIVE,ImGuiCol_HeaderActive)}},
     {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_TAB,ImGuiCol_Tab),styleBg(GUI_COLOR_TAB_HOVER,ImGuiCol_TabHovered),styleBg(GUI_COLOR_TAB_ACTIVE,ImGuiCol_TabSelected)}},
     {GUI_COLOR_TEXT,{{GUI_COLOR_TITLE_BACKGROUND_ACTIVE,colorOver(sty.Colors[ImGuiCol_TitleBgActive],base)}}},
-    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_TABLE_HEADER,ImGuiCol_TableHeaderBg)}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_TABLE_HEADER,ImGuiCol_TableHeaderBg),styleBg(GUI_COLOR_TABLE_ROW_EVEN,ImGuiCol_TableRowBg),styleBg(GUI_COLOR_TABLE_ROW_ODD,ImGuiCol_TableRowBgAlt)}},
     // order numbers: plain, the playing order, the song loop, or both
     {GUI_COLOR_ORDER_ROW_INDEX,{{GUI_COLOR_FRAME_BACKGROUND,window},{GUI_COLOR_ORDER_ACTIVE,orderActive},{GUI_COLOR_SONG_LOOP,colorOver(uiColors[GUI_COLOR_SONG_LOOP],window)},{GUI_COLOR_SONG_LOOP,colorOver(uiColors[GUI_COLOR_SONG_LOOP],orderActive)}}},
   };
@@ -591,7 +591,8 @@ void FurnaceGUI::drawContrastCheck() {
   const int patternCellStacks[][2]={
     {GUI_COLOR_PATTERN_SELECTION,-1},{GUI_COLOR_PATTERN_SELECTION_HOVER,-1},
     {GUI_COLOR_PATTERN_CURSOR,-1},{GUI_COLOR_PATTERN_CURSOR_HOVER,-1},
-    {GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_SELECTION},{GUI_COLOR_PATTERN_CURSOR_HOVER,GUI_COLOR_PATTERN_SELECTION}
+    {GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_SELECTION},{GUI_COLOR_PATTERN_CURSOR_HOVER,GUI_COLOR_PATTERN_SELECTION},
+    {GUI_COLOR_PATTERN_SELECTION_HOVER,GUI_COLOR_PATTERN_SELECTION}
   };
   // row numbers sit on rows only. left out on purpose: the inactive (dimmed
   // placeholder) colors, and rows of the previous and next pattern, which are
@@ -612,6 +613,11 @@ void FurnaceGUI::drawContrastCheck() {
   std::vector<ContrastBg> rowBgs={{GUI_COLOR_PATTERN_BG,pattern}};
   for (int i: patternRowOverlays) rowBgs.push_back({i,colorOver(uiColors[i],pattern)});
   std::vector<ContrastBg> cellBgs=rowBgs;
+  // the row-number gutter highlights the hovered row
+  std::vector<ContrastBg> gutterBgs=rowBgs;
+  for (const ContrastBg& row: rowBgs) {
+    gutterBgs.push_back({GUI_COLOR_PATTERN_SELECTION_HOVER,colorOver(uiColors[GUI_COLOR_PATTERN_SELECTION_HOVER],row.color)});
+  }
   for (const ContrastBg& row: rowBgs) {
     for (const int* stack: patternCellStacks) {
       ImVec4 c=row.color;
@@ -619,7 +625,7 @@ void FurnaceGUI::drawContrastCheck() {
       cellBgs.push_back({stack[0],colorOver(uiColors[stack[0]],c)});
     }
   }
-  for (int i: rowText) pairs.push_back({i,rowBgs});
+  for (int i: rowText) pairs.push_back({i,gutterBgs});
   for (int i: patternText) pairs.push_back({i,cellBgs});
 
   struct LowContrast {

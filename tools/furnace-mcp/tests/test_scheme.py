@@ -52,7 +52,7 @@ def test_gui_checks_the_same_pairs():
     assert [tuple(k for k in s if k != "-1") for s in stacks] == scheme._CELL_STACKS
     assert re.findall(r"GUI_COLOR_\w+", table("rowText[]={")) == scheme._ROW_TEXT
     assert re.findall(r"GUI_COLOR_\w+", table("patternText[]={")) == scheme._PATTERN_TEXT
-    assert scheme.CONTRAST_PAIRS[10:] == ([(k, scheme._ROW_BGS) for k in scheme._ROW_TEXT]
+    assert scheme.CONTRAST_PAIRS[10:] == ([(k, scheme._GUTTER_BGS) for k in scheme._ROW_TEXT]
                                           + [(k, scheme._CELL_BGS) for k in scheme._PATTERN_TEXT])
 
 

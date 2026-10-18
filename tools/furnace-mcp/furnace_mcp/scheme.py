@@ -88,9 +88,12 @@ _ROW_OVERLAYS = ["GUI_COLOR_PATTERN_HI_1", "GUI_COLOR_PATTERN_HI_2", "GUI_COLOR_
 _CELL_STACKS = [("GUI_COLOR_PATTERN_SELECTION",), ("GUI_COLOR_PATTERN_SELECTION_HOVER",),
                 ("GUI_COLOR_PATTERN_CURSOR",), ("GUI_COLOR_PATTERN_CURSOR_HOVER",),
                 ("GUI_COLOR_PATTERN_CURSOR", "GUI_COLOR_PATTERN_SELECTION"),
-                ("GUI_COLOR_PATTERN_CURSOR_HOVER", "GUI_COLOR_PATTERN_SELECTION")]
+                ("GUI_COLOR_PATTERN_CURSOR_HOVER", "GUI_COLOR_PATTERN_SELECTION"),
+                ("GUI_COLOR_PATTERN_SELECTION_HOVER", "GUI_COLOR_PATTERN_SELECTION")]
 _ROW_BGS = [_PATTERN] + [(k,) + _PATTERN for k in _ROW_OVERLAYS]
 _CELL_BGS = _ROW_BGS + [cell + row for row in _ROW_BGS for cell in _CELL_STACKS]
+# the row-number gutter highlights the hovered row
+_GUTTER_BGS = _ROW_BGS + [("GUI_COLOR_PATTERN_SELECTION_HOVER",) + row for row in _ROW_BGS]
 # order numbers: plain, the playing order, the song loop, or both
 _ORDER_BGS = [_WINDOW, ("GUI_COLOR_ORDER_ACTIVE",) + _WINDOW, ("GUI_COLOR_SONG_LOOP",) + _WINDOW,
               ("GUI_COLOR_SONG_LOOP", "GUI_COLOR_ORDER_ACTIVE") + _WINDOW]
@@ -123,9 +126,9 @@ CONTRAST_PAIRS = [
                                "GUI_COLOR_IMGUI_HEADER_ACTIVE")),
     ("GUI_COLOR_TEXT", _widget("GUI_COLOR_TAB", "GUI_COLOR_TAB_HOVER", "GUI_COLOR_TAB_ACTIVE")),
     ("GUI_COLOR_TEXT", [("GUI_COLOR_TITLE_BACKGROUND_ACTIVE", "GUI_COLOR_BACKGROUND")]),
-    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_TABLE_HEADER")),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_TABLE_HEADER", "GUI_COLOR_TABLE_ROW_EVEN", "GUI_COLOR_TABLE_ROW_ODD")),
     ("GUI_COLOR_ORDER_ROW_INDEX", _ORDER_BGS),
-] + [(k, _ROW_BGS) for k in _ROW_TEXT] + [(k, _CELL_BGS) for k in _PATTERN_TEXT]
+] + [(k, _GUTTER_BGS) for k in _ROW_TEXT] + [(k, _CELL_BGS) for k in _PATTERN_TEXT]
 
 
 def luminance(rgb):
@@ -317,7 +320,7 @@ def _light(dark_items):
     # background it can be drawn on (the overlays above are translucent ink, so
     # they are relit, never darkened, and these backgrounds stay put)
     dark_bg = flatten(dark, _WINDOW)
-    light_bgs = [flatten(out, layers) for layers in _ORDER_BGS + _CELL_BGS]
+    light_bgs = [flatten(out, layers) for layers in _ORDER_BGS + _CELL_BGS + _GUTTER_BGS]
     for key in ink:
         rgba = dark[key]
         if rgba[3] == 1.0 and contrast_ratio(rgba, dark_bg) >= 3.0:

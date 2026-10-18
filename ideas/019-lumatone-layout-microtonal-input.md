@@ -235,6 +235,8 @@ The prototype, about 100 lines, all marked "fork prototype (ideas/019)":
 
 While a table is on, keys missing from it play their plain note with the detune cleared, and every key releases by key. A and B round to the same note. Released by note, as before the prototype, letting go of B would have stopped A as well. Released by key, A keeps playing. All 178 furnace-mcp tests pass on the prototype build.
 
+**Live keys over a playing song**: a live key's detune would otherwise stay on the channel. The channel now keeps the song's own pitch, and the next pattern note puts it back unless that row sets a new one. Tested: song C-4 at +12.5, key B at +39 on the same channel, then the song's next C-4 plays +12.5 again, or +50 when it has `E5C0`.
+
 **Not done in step 4:** recording (the GUI side, step 6). Nothing has been tried with a real keyboard.
 
 ### Where this leaves the decision

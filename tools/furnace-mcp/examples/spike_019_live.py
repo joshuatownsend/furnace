@@ -96,7 +96,37 @@ def run(out):
         print(f"{f.name}: " + " | ".join(cells))
 
 
+def over_song(out):
+    """Key B over a song: channel 1 plays C-4 with E590 (+12.5 cents) at 0 s,
+    B takes the channel from 0.5 to 1.0 s, and the song plays C-4 again at
+    2.0 s. That note must get the song's +12.5 back, not B's +39; with its own
+    E5C0 it must get +50."""
+    table = tuning.key_table(tuning.read_ltn(PRESET), tuning.edo(31))
+    ch, note, _, _ = KEYS["B"]
+    events = out / "over.txt"
+    events.write_text(f"key {ch} {note} {table[ch, note][0]} {table[ch, note][1]}\n"
+                      f"on {round(0.5 / TICK)} {ch} {note} 127\noff {round(1.0 / TICK)} {ch} {note}\n")
+    c4 = note_hz(parse_note("C-4"))
+    print("\nkey B over a song (channel 1):")
+    for label, second, want in (("no E5xx", [], 12.5), ("E5C0", [{"code": 0xE5, "value": 0xC0}], 50)):
+        song = blank_song()
+        rows = song["subsongs"][0]["patterns"][0][0]["rows"]
+        rows[0] = {"note": parse_note("C-4"), "ins": 0, "effects": [{"code": 0xE5, "value": 0x90}]}
+        rows[20] = {"note": parse_note("C-4"), "ins": 0, "effects": second}
+        src = out / "over.json"
+        src.write_text(json.dumps(song))
+        wav = out / "over.wav"
+        fsong.run(["-loops", 0, "-livetest", events, "-output", wav, src])
+        x, rate = read_wav(wav)
+        x = x.mean(axis=1) if x.ndim > 1 else x
+        got = [window(x, rate, a, b)[1] for a, b in ((0.1, 0.45), (0.6, 0.95), (2.1, 2.5))]
+        cents = ["   -" if h is None else f"{1200 * math.log2(h / c4):+6.1f}" for h in got]
+        print(f"  second note {label:8s} song {cents[0]}  key B {cents[1]}  song again {cents[2]}"
+              f"  (want {want:+.1f} plus the chip's offset)")
+
+
 if __name__ == "__main__":
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp())
     out.mkdir(parents=True, exist_ok=True)
     run(out)
+    over_song(out)

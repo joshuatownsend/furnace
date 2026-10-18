@@ -341,6 +341,10 @@ struct DivChannelState {
   // fork prototype (ideas/019): the MIDI channel and note (chan<<7|note) that
   // started midiNote when a microtonal key table is on, else -1
   int midiKey;
+  // fork prototype (ideas/019): the song's own pitch before a live key
+  // detuned this channel, and the detune the key set; DIV_NO_PITCH if none.
+  // The next pattern note puts the song's pitch back.
+  int livePitchSaved, livePitchSet;
   size_t midiAge;
   bool midiAftertouch;
 
@@ -411,6 +415,8 @@ struct DivChannelState {
     curMidiNote(-1),
     midiPitch(-1),
     midiKey(-1),
+    livePitchSaved(DIV_NO_PITCH),
+    livePitchSet(DIV_NO_PITCH),
     midiAge(0),
     midiAftertouch(false) {}
 };

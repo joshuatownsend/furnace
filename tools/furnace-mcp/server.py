@@ -147,6 +147,45 @@ def _open_reloads(path):
     return reloads if open_path.resolve() == path else None
 
 
+_pitch_cache = {}  # probe song -> what its written A-4 sounded like
+
+
+def _octaves(n):
+    return f"{n} octave{'s' if n != 1 else ''}"
+
+
+def _pitch_line(s, subsong=0):
+    """What a written A-4 sounds like on each chip of song s, measured."""
+    a4 = float((s.get("songInfo") or {}).get("tuning") or 440.0)
+    parts = []
+    for ci, name, ch, probe, on, off in fsong.pitch_probes(s, subsong):
+        if isinstance(probe, str):
+            parts.append(f"{name}: not measured ({probe})")
+            continue
+        key = hashlib.sha1(json.dumps(probe, sort_keys=True).encode("utf-8")).hexdigest()
+        if key not in _pitch_cache:
+            (_, wav), = fsong.render(probe, _render_dir() / f"pitchprobe_{key[:12]}.wav")
+            r = analysis.analyze_note(wav, fsong.PROBE_NOTE, note_off_s=off, a4=a4, note_on_s=on)
+            pitch = r.get("pitch") or {}
+            _pitch_cache[key] = None if r.get("silent") or not pitch.get("hz") or pitch.get("uncertain")                 else (pitch["hz"], pitch["cents"])
+        got = _pitch_cache[key]
+        if got is None:
+            parts.append(f"{name}: not measured (the probe note had no clear pitch)")
+            continue
+        hz, cents = got
+        octs = round(cents / 1200)
+        rest = cents - 1200 * octs
+        if octs == 0:
+            what = "as written"
+        else:
+            what = (f"{_octaves(abs(octs))} {'up' if octs > 0 else 'down'}: write "
+                    f"{_octaves(abs(octs))} {'lower' if octs > 0 else 'higher'} than the pitch you want")
+        if abs(rest) >= 20:
+            what += f" ({abs(rest):.0f} cents {'sharp' if rest > 0 else 'flat'})"
+        parts.append(f"{name} (channel {ch}): {hz:.0f} Hz, {what}")
+    return "pitch, what a written A-4 sounds like on each chip: " + "; ".join(parts) if parts else ""
+
+
 def _render_dir():
     d = Path(os.environ.get("FURNACE_MCP_RENDERS", Path(tempfile.gettempdir()) / "furnace-mcp"))
     d.mkdir(parents=True, exist_ok=True)
@@ -164,7 +203,12 @@ def current_song() -> str:
 @_tool(_READ)
 def inspect_song(subsong: int = 0, path: str = "") -> str:
     """Summary of a song: name, chips, channels (with indices), sub-songs, orders,
-    pattern length, speed, duration, instruments and samples."""
+    pattern length, speed, duration, instruments and samples, and what a written
+    A-4 sounds like on each chip. Furnace keeps each chip's traditional octave
+    naming, so a written note can sound octaves away from its name (an SN76489
+    PSG plays two octaves up, NES one; FM chips as written): write parts at the
+    octave the pitch line says. The first call per chip setup renders one probe
+    note per chip (about a second each)."""
     p = _path(path)
     s = _load(p)
     sub = fsong.subsong(s, subsong)
@@ -187,6 +231,7 @@ def inspect_song(subsong: int = 0, path: str = "") -> str:
         "samples: " + ", ".join(
             f"{i:02X} {smp.get('name', '')!r}" for i, smp in enumerate(s.get("samples") or [])),
         f"wavetables: {len(s.get('wavetables') or [])}",
+        _pitch_line(s, subsong),
     ]
     return "\n".join(l for l in lines if l)
 

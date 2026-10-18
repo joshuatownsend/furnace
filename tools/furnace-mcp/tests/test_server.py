@@ -66,6 +66,29 @@ async def test_inspect_song_without_samples():
     assert "Bally Astrocade" in out and "06 'Open Hat'" in out
 
 
+async def test_inspect_reports_each_chips_octave(demo):
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("inspect_song", {"path": demo}))
+    line = next(l for l in out.splitlines() if l.startswith("pitch"))
+    # FM plays as written; Furnace's SN76489 sounds two octaves above the note
+    assert "(channel 0): 4" in line and "as written" in line.split(";")[0], line
+    assert "SN76489 (channel 9): 17" in line and "2 octaves up" in line, line
+
+
+async def test_inspect_reports_the_ay_octave():
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("inspect_song", {"path": str(REPO / "demos" / "ay8910" / "AY-3-8910_Jam.fur")}))
+    assert "AY-3-8910 (channel 0)" in out
+
+
+async def test_inspect_does_not_probe_a_sample_chip():
+    # a probe would measure sample 0's tuning, not the chip's octave
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("inspect_song", {"path": str(REPO / "demos" / "amiga" / "Ibiza.fur")}))
+    line = next(l for l in out.splitlines() if l.startswith("pitch"))
+    assert "not measured (a sample chip" in line and "Hz" not in line, line
+
+
 async def test_write_read_render(demo):
     async with Client(mcp) as c:
         rows = "A-4 0C 7F\n" + "...\n" * 62 + "OFF"

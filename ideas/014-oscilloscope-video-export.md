@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat e9988cf35..HEAD -- src/gui/chanOsc.cpp src/gui/osc.cpp src/gui/oscTrigger.cpp src/main.cpp src/engine/export src/engine/dispatch.h`.
 
-- **Status**: BUILT (approach B, 2026-10-17; see Spike results)
+- **Status**: DONE (merged to master as #10, `ec521e616`, 2026-10-18; approach B, see Spike results)
 - **Verdict**: Advance
 - **Score**: 7/10 (my estimate; /ideate has not scored this)
 - **Lenses**: outside-in, with a real user in the family

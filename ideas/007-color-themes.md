@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat e9988cf35..HEAD -- src/gui/settings.cpp src/gui/settings/allSettings.cpp src/gui/settings/loadSettings.cpp src/gui/guiConst.cpp`.
 
-- **Status**: BUILT (presets, contrast check and Light hint, 2026-10-17; see Spike results)
+- **Status**: DONE (merged to master as #11, `60c41d0bb`, 2026-10-18; see Spike results)
 - **Verdict**: Advance
 - **Score**: 7/10 (my estimate; /ideate has not scored this)
 - **Lenses**: both (code check plus community demand)
@@ -58,6 +58,8 @@ The Dark/Light radio switches the Dear ImGui base style (`settings.cpp:700`), bu
 - **`python -m furnace_mcp.scheme check FILE`** runs the same check over an exported scheme file (question 4's prototype), deriving basic mode's colors from the accents as Furnace does; `... presets` regenerates the header.
 
 **Question 3: how many roles.** The Light preset is generated, not hand-edited (`light_scheme` in `tools/furnace-mcp/furnace_mcp/scheme.py`). Of the 361 keys, 61 are surfaces (backgrounds, buttons, cursors, selections), 11 keep their color (piano keys, backdrops, shadows), 4 are set by hand (text, disabled text, the two accents), and 285 are ink: hue-coded colors for pattern effects, instrument types, macros, files, channels, memory and scopes. Surfaces and ink keep their hue and get their lightness inverted in OKLab. Ink that was readable on the dark window is then darkened, along its own hue, until it passes AA on the light window and on every light pattern background. Ink that was meant to be subtle (grid lines, the note-off dot) stays subtle. The Light preset passes every check, in basic and guru mode.
+
+**Follow-ups from review** (checker coverage for hand-customized schemes; the shipped presets are unaffected): text on child-window backgrounds, title text on inactive and collapsed title bars, and tab labels on unfocused tab bars.
 
 **Questions 4 and 5: Perfect Palette.** The same split is the mapping a palette needs. A Perfect Palette export only has to supply about eight roles:
 

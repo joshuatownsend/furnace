@@ -158,3 +158,21 @@ def test_ping_pong_half_cycle_loop():
     x = np.concatenate([np.zeros(50), ramp])
     r = analysis.detect_pitch(analysis.sample_segment(x, (50, 66, 2))[0], 8000)
     assert r["period"] == pytest.approx(32, abs=0.05)
+
+
+@pytest.mark.parametrize("rate", [8000, 22050, 44100])
+def test_two_sample_period_at_any_rate(rate):
+    r = analysis.detect_pitch(np.tile([0.8, -0.8], 4000), rate)
+    assert r["hz"] == pytest.approx(rate / 2, rel=0.006)
+
+
+def test_wavetable_mode_plays_no_sample():
+    song = {"instruments": [{"type": 4, "amiga": {"initSample": 2, "useWave": True}}]}
+    assert fsong.sample_instruments(song, 2) == []
+
+
+def test_very_short_one_shot():
+    x = np.tile([0.8, 0.2, -0.5, -0.5], 18)  # 72 samples, steady
+    seg = analysis.sample_segment(x)[0]
+    r = analysis.detect_pitch(seg, 8000)
+    assert r["hz"] == pytest.approx(2000, rel=0.006)

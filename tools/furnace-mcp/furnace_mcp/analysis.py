@@ -434,6 +434,8 @@ def sample_segment(x, loop=None):
     a, b = (attack_end + 1) * win, (int(loud[-1]) + 1) * win
     if b - a < min(2048, n // 2):  # short or percussive: everything from the attack on
         a, b = attack_end * win, n
+    if b - a < 64 <= n:  # a very short one-shot: keep enough to measure
+        a, b = 0, n
     b = min(b, a + SEGMENT_MAX)
     return x[a:b], ("the whole sample" if (a, b) == (0, n) else f"samples {a}-{b}")
 
@@ -468,7 +470,7 @@ def _harmonics(mag, binhz, f0, rate, n):
     return out, float(power[lo_all:hi_all].sum())
 
 
-def detect_pitch(x, rate, fmin=20.0, fmax=5000.0):
+def detect_pitch(x, rate, fmin=20.0, fmax=None):
     """Fundamental of a monophonic sound (rate = the rate it plays at).
 
     YIN finds the period (it doesn't fall for a weak fundamental the way an FFT
@@ -481,7 +483,7 @@ def detect_pitch(x, rate, fmin=20.0, fmax=5000.0):
     if len(x) < 64 or np.sqrt(np.mean(x ** 2)) < 1e-4:
         return {"hz": None, "reason": "silent or too short"}
     # search down to a 2-sample period: short chip loops can be 2 or 3 samples
-    fmax = min(fmax, rate / 2)
+    fmax = rate / 2 if fmax is None else min(fmax, rate / 2)
     tmin = max(2, int(rate / fmax))
     tmax = min(int(rate / fmin), len(x) // 2)
     if tmax <= tmin + 2:

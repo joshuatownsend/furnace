@@ -637,6 +637,8 @@ def sample_instruments(song, index):
         amiga = ins.get("amiga") or {}
         if ins.get("type", 0) not in SAMPLE_INS_TYPES and not amiga.get("useSample"):
             continue
+        if amiga.get("useWave"):  # wavetable mode plays no sample (amiga.cpp, snes.cpp)
+            continue
         if amiga.get("useNoteMap"):
             used = {m.get("map") for m in amiga.get("sampleMap") or []}
         else:

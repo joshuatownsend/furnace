@@ -1,6 +1,6 @@
 # What's new in this fork
 
-This is Josh Townsend's personal fork of [Furnace](https://github.com/tildearrow/furnace). It adds composing and tuning with Claude, new chips, and tools for sharing songs. Everything below was merged between 2026-10-16 and 2026-10-18 (PRs #1 to #13). The plans and test write-ups behind each feature are in [`ideas/`](ideas/README.md).
+This is Josh Townsend's personal fork of [Furnace](https://github.com/tildearrow/furnace). It adds composing and tuning with Claude, new chips, and tools for sharing songs. Everything below was merged between 2026-10-16 and 2026-10-18 (PRs #1 to #14). The plans and test write-ups behind each feature are in [`ideas/`](ideas/README.md).
 
 ## At a glance
 
@@ -14,6 +14,7 @@ This is Josh Townsend's personal fork of [Furnace](https://github.com/tildearrow
 | New chip | Bally Astrocade, with an example song | #6, #7 |
 | Sample tuning | Claude measures a sample's pitch and tunes it | #12 |
 | Wave editor | A Harmonics tab that shows what a wave is made of | #13 |
+| Pictures for Claude | Waveforms, spectrograms and video previews Claude can look at | #14 |
 
 ---
 
@@ -73,6 +74,19 @@ An MCP server in [`tools/furnace-mcp`](tools/furnace-mcp/README.md) lets Claude 
   - `export`: .fur, JSON, VGM, S98, WAV or text.
   - `export_video`: see above.
 - **Example songs:** `examples/victory_fanfare.fur` (Genesis) and `examples/neon_midway.fur` (Astrocade).
+
+### Pictures for Claude
+
+*Show Claude the audio* (#14)
+
+Four tools can now return a picture with their text report, so Claude can see the sound as well as read numbers about it:
+
+- **`render(image=True)`:** the mix waveform, a spectrogram, and one waveform per channel on a shared scale (quiet looks quiet). Clips show as red bands, and a line marks each order, labelled in hex like the order list.
+- **`preview_instrument(image=True)`:** the whole note, close-ups of its wave in the attack, the held part and just before release, and bars for the first 8 harmonics.
+- **`detect_sample_pitch(image=True)`:** the sample with its loop points and the part measured, plus a close-up of the loop seam, where a click shows as a jump.
+- **`export_video(preview=True)`:** 8 frames of the scope video on one sheet, without the long encode.
+
+**Why:** a blind test with fresh agents compared text alone with text plus the picture, on eight questions with known answers. With pictures Claude got 8 of 8; with text alone it got 5 of 8, two of them guesses. Pictures won on where things happen (which order clips, where a channel drops out), on a clicking loop, and on an instrument edit that the text got wrong. Details are in `ideas/022-show-claude-the-audio.md`. Pictures need ffmpeg and cost about 2k tokens each, so they are off unless asked for.
 
 ## Songs as JSON
 

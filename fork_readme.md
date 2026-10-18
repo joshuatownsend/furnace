@@ -195,8 +195,10 @@ uv run --project <repo>/tools/furnace-mcp python <repo>/tools/furnace-mcp/server
 | A file: .fur, JSON, VGM, S98, WAV or text | `export` |
 | A scope video | `export_video` |
 | A sample's real pitch, or tuning it to C | `detect_sample_pitch`, `tune_sample` |
+| A picture of the sound, for Claude to look at | `render`, `preview_instrument` and `detect_sample_pitch` with an image; `export_video` with a preview |
 
 **Tips:**
+- **Ask for pictures:** say "render it with the image" or "preview the instrument with a picture". Claude then sees where things happen in the song (order lines, clips in red, a channel dropping out) and what a wave looks like. Pictures need ffmpeg, and each costs Claude about 2k tokens.
 - **Notes:** Claude writes notes in Furnace's numbering: C-4 is middle C, and `c_1` is octave −1.
 - **Octaves:** some chips sound in a different octave from the written note; an SN76489 plays two octaves up. `inspect_song` reports this per chip, so ask Claude to inspect the song before it writes parts.
 - **Trust the numbers for pitch and envelope:** `preview_instrument` measures both reliably. Judge tone by ear.

@@ -3,7 +3,7 @@
 > Brief for a design spike. Build the first image behind an option, then test whether it helps. Do not make images the default until the test says so.
 > Drift check: `git diff --stat f491976c9..HEAD -- tools/furnace-mcp`.
 
-- **Status**: Spike done 2026-10-18: build it (item 1 on branch idea-022-render-image)
+- **Status**: Built 2026-10-18: items 1-4 in PR #14 (branch idea-022-render-image)
 - **Verdict**: Validate
 - **Score**: 7/10 (my estimate; /ideate has not scored this)
 - **Lenses**: outside-in (a public report from another tool's author) plus inside-out (004's weak timbre result)
@@ -128,6 +128,16 @@ Agents with the image made 3–5 tool calls, against 2–3 for text only, and us
 **Caveats.** In tasks 5 and 6 the text arm got `render` reports, which hold no envelope or transient numbers. In real use Claude would turn to `preview_instrument` or `detect_sample_pitch` for those questions. The verdict doesn't depend on them: tasks 1 and 4.1 alone clear the bar, and image wins the instrument trials 3 of 3 either way. One agent per arm per trial. I designed the tasks, and tasks 1-2 were rerun after fixes. Text did better on the instrument edits than in 004 (2 of 3, against 1 of 3). The 004 report fixes probably account for that.
 
 **Verdict: build it.** Images win on 3 tasks outright (1, 4.1, 5), and on 5 if stated guesses don't count. That clears the "at least two more" bar. They also won the instrument-edit trials 3 of 3. Next: items 2-4, with the task-4 close-up layout as the starting point for `preview_instrument(image=True)`. One decision for Josh: whether the cost of about 2k tokens per image is acceptable, which decides whether `preview_instrument` shows images by default.
+
+## Build (2026-10-18)
+
+Josh accepted the token cost, so items 2-4 were built after the spike:
+
+- **`preview_instrument(image=True)`:** the task-4 layout. The whole note with note on and off marked, three close-ups of about four cycles (attack +20 ms, held +150 ms, just before release), and harmonic bars for the attack and the held part. Each close-up is scaled to fit and labelled with its peak, because at a shared scale a sustain 25 dB down was a flat line.
+- **`detect_sample_pitch(image=True)`:** the sample with the measured part shaded and the loop points marked, plus the loop seam close up (the end of the loop joined to its start, as it plays).
+- **`export_video(preview=True)`:** 8 real frames from the video renderer, tiled by ffmpeg with grey borders between frames. It skips drawing and encoding the rest.
+
+Images stay opt-in on every tool. The first live call through the reconnected server, `render(image=True)` on *Neon Midway*, came back as text plus a picture I could read.
 
 ## Kickoff prompt
 

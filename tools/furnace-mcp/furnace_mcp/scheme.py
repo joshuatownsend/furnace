@@ -15,14 +15,15 @@ _REPO = Path(__file__).resolve().parents[3]
 _COLOR_DEF = re.compile(r'D\((GUI_COLOR_\w+),_N\("[^"]*"\),ImVec4\(([^)]*)\)\)')
 
 
-def defaults(source=None):
-    """{key: (r, g, b, a)} with floats 0..1, in the order guiConst.cpp lists them."""
-    text = Path(source or _REPO / "src" / "gui" / "guiConst.cpp").read_text(encoding="utf-8")
+def defaults():
+    """{key: (r, g, b, a)} with floats 0..1, in the order guiConst.cpp lists them.
+    (The tests pin this parse against gui.h, so a format change fails loudly.)"""
+    text = (_REPO / "src" / "gui" / "guiConst.cpp").read_text(encoding="utf-8")
     out = {}
     for key, nums in _COLOR_DEF.findall(text):
         out[key] = tuple(float(v.strip().rstrip("f")) for v in nums.split(","))
     if not out:
-        raise ValueError(f"no color definitions found in {source or 'guiConst.cpp'}")
+        raise ValueError("no color definitions found in guiConst.cpp")
     return out
 
 

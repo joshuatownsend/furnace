@@ -229,6 +229,10 @@ def subsong(song, index):
     return subs[index]
 
 
+def _part_number(words):
+    return next((w for w in words if re.search(r"[A-Za-z]", w) and re.search(r"\d", w)), None)
+
+
 def channel_labels(song):
     """One label per channel, e.g. 'YM2612 #3' (chip short name + 1-based index)."""
     labels = []
@@ -236,8 +240,9 @@ def channel_labels(song):
         name = chip.get("name", "chip")
         # the part number names the chip best: "Yamaha YM2612 ..." -> YM2612,
         # "NES (Ricoh 2A03)" -> 2A03; outside the brackets wins over inside
-        words = re.sub(r"\s*\(.*?\)", "", name).split() + re.findall(r"[\w-]+", name)
-        short = next((w for w in words if re.search(r"[A-Za-z]", w) and re.search(r"\d", w)), name)
+        outside = re.sub(r"\s*\(.*?\)", "", name).split()
+        inside = re.findall(r"[\w-]+", " ".join(re.findall(r"\((.*?)\)", name)))
+        short = _part_number(outside) or _part_number(inside) or name
         for k in range(chip.get("channels", 0)):
             labels.append(f"{short} #{k + 1}")
     return labels

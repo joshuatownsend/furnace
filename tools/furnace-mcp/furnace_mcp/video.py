@@ -10,9 +10,11 @@ Usage: python -m furnace_mcp.video SONG OUT.mp4 [--orders 0-3] [--size 1920x1080
 import argparse
 import math
 import os
+import queue
 import shutil
 import subprocess
 import tempfile
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -24,6 +26,15 @@ from .analysis import read_wav
 
 _FONT = fscheme._REPO / "res" / "fonts" / "IBMPlexSans-Regular.otf"  # Furnace's UI font
 SILENT = 1e-3  # a channel that moves less than this is left out
+
+
+def parse_size(text):
+    """'1920x1080' -> (1920, 1080)."""
+    try:
+        width, height = (int(v) for v in text.lower().split("x"))
+    except ValueError:
+        raise ValueError(f"size must look like 1920x1080, not {text!r}") from None
+    return width, height
 
 
 def layout(n, width, height, aspect=2.0):
@@ -108,11 +119,11 @@ def _span_pixels(lo, hi):
 class Scope:
     def __init__(self, label, samples, color):
         self.label = label
-        self.color = color
-        x = samples - samples.mean()
-        self.peak = float(np.abs(x).max())
-        self.x = x
-        self.edges = rising_edges(x, 0.1 * self.peak)
+        self.rgb = _rgb(color)
+        samples -= samples.mean()  # in place: one full-length copy per channel is plenty
+        self.peak = float(np.abs(samples).max())
+        self.x = samples
+        self.edges = rising_edges(samples, 0.1 * self.peak)
 
 
 def _shown_channels(song, sub_index):
@@ -211,7 +222,6 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
             base[y0:y0 + h, x0] = border
             base[y0, x0:x0 + w] = border
         thick = max(1.0, height / 720)
-        rgb = [_rgb(s.color) for s in scopes]
 
         vf = []
         if labels and _FONT.is_file():
@@ -230,21 +240,41 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
         cmd += ["-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, cwd=td)
+        # draw the next frame while a writer thread hands the last one to ffmpeg
+        free, full = queue.Queue(), queue.Queue()
+        for _ in range(3):
+            free.put(np.empty_like(base))
+        broken = threading.Event()
+
+        def write():
+            while (frame := full.get()) is not None:
+                if not broken.is_set():
+                    try:
+                        proc.stdin.write(memoryview(frame))
+                    except (BrokenPipeError, OSError):
+                        broken.set()  # ffmpeg quit; its stderr says why
+                free.put(frame)
+
+        writer = threading.Thread(target=write, daemon=True)
+        writer.start()
+        for f in range(nframes):
+            if broken.is_set():
+                break
+            frame = free.get()
+            frame[:] = base
+            center = int(f / fps * rate)
+            for s, (x0, y0, w, h) in zip(scopes, cells):
+                h_in = h - 2
+                start = window_start(s.edges, center, size, nsamp)
+                py, px = _span_pixels(*_wave_span(s.x[start:start + size], w - 1, h_in,
+                                                  0.45 * h_in / s.peak, thick))
+                frame[y0 + 1 + py, x0 + 1 + px] = s.rgb
+            full.put(frame)
+        full.put(None)
+        writer.join()
         try:
-            frame = np.empty_like(base)
-            for f in range(nframes):
-                center = int(f / fps * rate)
-                frame[:] = base
-                for s, (x0, y0, w, h), c in zip(scopes, cells, rgb):
-                    h_in = h - 2
-                    start = window_start(s.edges, center, size, nsamp)
-                    seg = s.x[start:start + size]
-                    scale = 0.45 * h_in / s.peak
-                    py, px = _span_pixels(*_wave_span(seg, w - 1, h_in, scale, thick))
-                    frame[y0 + 1 + py, x0 + 1 + px] = c
-                proc.stdin.write(frame.tobytes())
             proc.stdin.close()
-        except BrokenPipeError:
+        except OSError:
             pass
         err = proc.stderr.read().decode("utf-8", "replace")
         if proc.wait() != 0:
@@ -273,7 +303,7 @@ def main(argv=None):
     if a.orders:
         lo, _, hi = a.orders.partition("-")
         start, end = int(lo, 16), int(hi or lo, 16)
-    width, height = (int(v) for v in a.size.lower().split("x"))
+    width, height = parse_size(a.size)
     colors = fscheme.read(a.scheme)[0] if a.scheme else None
     r = make_video(fsong.load(a.song), a.out, sub_index=a.subsong, order_start=start, order_end=end,
                    width=width, height=height, fps=a.fps, window_ms=a.window_ms, colors=colors,

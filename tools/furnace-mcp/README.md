@@ -59,7 +59,7 @@ It renders the mix and each channel separately with the Furnace CLI, draws one s
 - Each scope waits for a rising edge, as Furnace's Channel Oscilloscope does, so a steady note holds still on screen. Each channel is scaled to its own peak in the range, so quiet channels still show.
 - Channels that make no sound in the range are left out, and so are channels you hid from the Channel Oscilloscope in Furnace. A channel's custom name is its label.
 - Colors come from your Furnace color scheme (`furnace.cfg`), or from a scheme file exported in Settings > Color (`--scheme`). `--color channel` uses each channel's custom color, else one color per chip.
-- `--orders` takes hex order numbers, as in the order list. Rendering every channel takes time (about 5 minutes for a 2.5-minute Genesis song), so try a few orders first. Channels render in parallel through the CLI's `-exportchans` flag, so rebuild Furnace if it says that flag is unknown.
+- `--orders` takes hex order numbers, as in the order list. Rendering every channel takes time (about 4 minutes for a 2.5-minute Genesis song), so try a few orders first. Channels render in parallel through the CLI's `-exportchans` flag, so rebuild Furnace if it says that flag is unknown.
 
 ## Tests
 

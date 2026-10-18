@@ -425,10 +425,7 @@ def export_video(output: str, order_start: int = 0, order_end: int | None = None
     out = Path(output).expanduser().resolve()
     if out.suffix.lower() != ".mp4":
         raise ValueError("output must be an .mp4 file")
-    try:
-        width, height = (int(v) for v in size.lower().split("x"))
-    except ValueError:
-        raise ValueError(f"size must look like 1920x1080, not {size!r}") from None
+    width, height = video.parse_size(size)
     colors = fscheme.read(Path(scheme).expanduser())[0] if scheme else None
     r = video.make_video(_load(p), out, sub_index=subsong, order_start=order_start,
                          order_end=order_end, width=width, height=height, fps=fps,

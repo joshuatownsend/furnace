@@ -107,3 +107,16 @@ def test_ffmpeg_path_is_absolute(tmp_path, monkeypatch):
     assert video.find_ffmpeg("bin/ffmpeg.exe") == str(fake.resolve())
     with pytest.raises(FileNotFoundError):
         video.find_ffmpeg("bin/nothing.exe")
+
+
+def test_scope_signal_survives_panning_and_antiphase():
+    t = np.arange(8192)
+    tone = np.sin(2 * np.pi * t / 64)
+    half = len(t) // 2
+    # hard left for the first half, hard right for the second
+    panned = np.stack([np.where(t < half, tone, 0), np.where(t < half, 0, tone)], axis=1)
+    sig = video.scope_signal(panned)
+    assert np.ptp(sig[:half]) > 0.9 and np.ptp(sig[half:]) > 0.9
+    # one output inverted: the average would be silent
+    antiphase = np.stack([tone, -tone], axis=1)
+    assert np.ptp(video.scope_signal(antiphase)) > 1.9

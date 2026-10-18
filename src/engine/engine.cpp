@@ -3878,6 +3878,8 @@ void DivEngine::autoNoteOffAll() {
       pendingNotes.push_back(DivNoteEvent(i,-1,0,-1,false));
       chan[i].midiNote=-1;
     }
+    // fork prototype (ideas/019): a late key-up must not match this channel
+    chan[i].midiKey=-1;
   }
 }
 

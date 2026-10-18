@@ -548,94 +548,92 @@ bool FurnaceGUI::colorSchemeMismatch() {
 }
 
 void FurnaceGUI::drawContrastCheck() {
-  // the pairs CONTRAST_PAIRS in tools/furnace-mcp/furnace_mcp/scheme.py checks.
+  // checks what tools/furnace-mcp/furnace_mcp/scheme.py's contrast_report checks:
+  // each text color against every background it is drawn on, reporting the worst.
   // widget backgrounds come from the applied style, so basic mode's colors
   // (derived from the accents) are what gets checked
+  struct ContrastBg {
+    int name;
+    ImVec4 color;
+  };
   struct ContrastPair {
-    int fg, bgName;
-    ImVec4 bg;
+    int fg;
+    std::vector<ContrastBg> bgs;
   };
   const ImGuiStyle& sty=ImGui::GetStyle();
   ImVec4 base=opaqueBackground(uiColors);
   ImVec4 window=colorOver(sty.Colors[ImGuiCol_WindowBg],base);
   ImVec4 pattern=colorOver(uiColors[GUI_COLOR_PATTERN_BG],window);
-  ImVec4 cursor=colorOver(uiColors[GUI_COLOR_PATTERN_CURSOR],pattern);
-  const ContrastPair pairs[]={
-    {GUI_COLOR_TEXT,GUI_COLOR_FRAME_BACKGROUND,window},
-    {GUI_COLOR_TEXT,GUI_COLOR_FRAME_BACKGROUND_POPUP,colorOver(sty.Colors[ImGuiCol_PopupBg],window)},
-    {GUI_COLOR_TEXT,GUI_COLOR_MENU_BAR,colorOver(sty.Colors[ImGuiCol_MenuBarBg],window)},
-    {GUI_COLOR_TEXT,GUI_COLOR_BUTTON,colorOver(sty.Colors[ImGuiCol_Button],window)},
-    {GUI_COLOR_TEXT,GUI_COLOR_WIDGET_BACKGROUND,colorOver(sty.Colors[ImGuiCol_FrameBg],window)},
-    {GUI_COLOR_TEXT,GUI_COLOR_IMGUI_HEADER,colorOver(sty.Colors[ImGuiCol_Header],window)},
-    {GUI_COLOR_TEXT,GUI_COLOR_TAB_ACTIVE,colorOver(sty.Colors[ImGuiCol_TabSelected],window)},
-    {GUI_COLOR_TEXT,GUI_COLOR_TITLE_BACKGROUND_ACTIVE,colorOver(sty.Colors[ImGuiCol_TitleBgActive],base)},
-    {GUI_COLOR_TEXT,GUI_COLOR_TABLE_HEADER,colorOver(sty.Colors[ImGuiCol_TableHeaderBg],window)},
-    {GUI_COLOR_ORDER_ROW_INDEX,GUI_COLOR_FRAME_BACKGROUND,window},
-    {GUI_COLOR_PATTERN_ROW_INDEX,GUI_COLOR_PATTERN_BG,pattern},
-    // pattern text, on the pattern and under the cursor
-    {GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_VOLUME_HALF,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_INVALID,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_PITCH,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_VOLUME,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_PANNING,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_SONG,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_TIME,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_SPEED,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_EFFECT_MISC,GUI_COLOR_PATTERN_BG,pattern},
-    {GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_VOLUME_HALF,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_INVALID,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_PITCH,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_VOLUME,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_PANNING,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_SONG,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_TIME,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_SPEED,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,GUI_COLOR_PATTERN_CURSOR,cursor},
-    {GUI_COLOR_PATTERN_EFFECT_MISC,GUI_COLOR_PATTERN_CURSOR,cursor},
+  std::vector<ContrastPair> pairs={
+    {GUI_COLOR_TEXT,{{GUI_COLOR_FRAME_BACKGROUND,window}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_FRAME_BACKGROUND_POPUP,colorOver(sty.Colors[ImGuiCol_PopupBg],window)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_MENU_BAR,colorOver(sty.Colors[ImGuiCol_MenuBarBg],window)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_BUTTON,colorOver(sty.Colors[ImGuiCol_Button],window)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_WIDGET_BACKGROUND,colorOver(sty.Colors[ImGuiCol_FrameBg],window)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_IMGUI_HEADER,colorOver(sty.Colors[ImGuiCol_Header],window)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_TAB_ACTIVE,colorOver(sty.Colors[ImGuiCol_TabSelected],window)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_TITLE_BACKGROUND_ACTIVE,colorOver(sty.Colors[ImGuiCol_TitleBgActive],base)}}},
+    {GUI_COLOR_TEXT,{{GUI_COLOR_TABLE_HEADER,colorOver(sty.Colors[ImGuiCol_TableHeaderBg],window)}}},
+    {GUI_COLOR_ORDER_ROW_INDEX,{{GUI_COLOR_FRAME_BACKGROUND,window}}},
   };
-  const int total=IM_ARRAYSIZE(pairs);
+  // pattern text sits on the pattern, on highlighted rows and the play head
+  // (row index too), and on the selection and the cursor, hovered or not
+  const int patternRowOverlays[]={
+    GUI_COLOR_PATTERN_HI_1,GUI_COLOR_PATTERN_HI_2,GUI_COLOR_PATTERN_PLAY_HEAD
+  };
+  const int patternCellOverlays[]={
+    GUI_COLOR_PATTERN_SELECTION,GUI_COLOR_PATTERN_SELECTION_HOVER,
+    GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_CURSOR_HOVER
+  };
+  const int patternText[]={
+    GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_VOLUME_HALF,
+    GUI_COLOR_PATTERN_EFFECT_INVALID,GUI_COLOR_PATTERN_EFFECT_PITCH,GUI_COLOR_PATTERN_EFFECT_VOLUME,
+    GUI_COLOR_PATTERN_EFFECT_PANNING,GUI_COLOR_PATTERN_EFFECT_SONG,GUI_COLOR_PATTERN_EFFECT_TIME,
+    GUI_COLOR_PATTERN_EFFECT_SPEED,GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,
+    GUI_COLOR_PATTERN_EFFECT_MISC
+  };
+  std::vector<ContrastBg> rowBgs={{GUI_COLOR_PATTERN_BG,pattern}};
+  for (int i: patternRowOverlays) rowBgs.push_back({i,colorOver(uiColors[i],pattern)});
+  std::vector<ContrastBg> cellBgs=rowBgs;
+  for (int i: patternCellOverlays) cellBgs.push_back({i,colorOver(uiColors[i],pattern)});
+  pairs.push_back({GUI_COLOR_PATTERN_ROW_INDEX,rowBgs});
+  for (int i: patternText) pairs.push_back({i,cellBgs});
 
   struct LowContrast {
-    const ContrastPair* pair;
-    ImVec4 fg;
+    int fg;
+    ContrastBg bg;
+    ImVec4 fgColor;
     float ratio;
   };
   std::vector<LowContrast> low;
   for (const ContrastPair& i: pairs) {
-    ImVec4 fg=colorOver(uiColors[i.fg],i.bg);
-    float ratio=contrastRatio(fg,i.bg);
-    if (ratio<4.5f) low.push_back({&i,fg,ratio});
+    LowContrast worst={i.fg,i.bgs[0],ImVec4(),100.0f};
+    for (const ContrastBg& j: i.bgs) {
+      ImVec4 fg=colorOver(uiColors[i.fg],j.color);
+      float ratio=contrastRatio(fg,j.color);
+      if (ratio<worst.ratio) worst={i.fg,j,fg,ratio};
+    }
+    if (worst.ratio<4.5f) low.push_back(worst);
   }
+  const int total=(int)pairs.size();
   if (low.empty()) {
-    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1)."),total);
+    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1) on every background they are drawn on."),total);
     return;
   }
   ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) and may be hard to read:"),(int)low.size(),total);
   ImDrawList* dl=ImGui::GetWindowDrawList();
   ImGui::Indent();
   for (const LowContrast& l: low) {
-    const ContrastPair& i=*l.pair;
-    const ImVec4& fg=l.fg;
-    float ratio=l.ratio;
-    // a sample of the text on its background, then which colors they are
-    String sample=fmt::sprintf("Aa %.1f:1",ratio);
+    // a sample of the text on its worst background, then which colors they are
+    String sample=fmt::sprintf("Aa %.1f:1",l.ratio);
     ImVec2 pos=ImGui::GetCursorScreenPos();
     ImVec2 size(ImGui::CalcTextSize("Aa 00.0:1").x+sty.FramePadding.x*2.0f,ImGui::GetFrameHeight());
-    dl->AddRectFilled(pos,ImVec2(pos.x+size.x,pos.y+size.y),ImGui::GetColorU32(i.bg));
-    dl->AddText(ImVec2(pos.x+sty.FramePadding.x,pos.y+sty.FramePadding.y),ImGui::GetColorU32(fg),sample.c_str());
+    dl->AddRectFilled(pos,ImVec2(pos.x+size.x,pos.y+size.y),ImGui::GetColorU32(l.bg.color));
+    dl->AddText(ImVec2(pos.x+sty.FramePadding.x,pos.y+sty.FramePadding.y),ImGui::GetColorU32(l.fgColor),sample.c_str());
     ImGui::Dummy(size);
     ImGui::SameLine();
     ImGui::AlignTextToFramePadding();
-    ImGui::Text(_("%s on %s"),_(guiColors[i.fg].friendlyName),_(guiColors[i.bgName].friendlyName));
+    ImGui::Text(_("%s on %s"),_(guiColors[l.fg].friendlyName),_(guiColors[l.bg.name].friendlyName));
   }
   ImGui::Unindent();
 }

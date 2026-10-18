@@ -81,29 +81,34 @@ AA = 4.5  # WCAG AA for normal text
 
 _WINDOW = ("GUI_COLOR_FRAME_BACKGROUND", "GUI_COLOR_BACKGROUND")
 _PATTERN = ("GUI_COLOR_PATTERN_BG",) + _WINDOW
-_CURSOR = ("GUI_COLOR_PATTERN_CURSOR",) + _PATTERN
-# what the pattern view draws as text: on the pattern, and under the cursor
+# pattern text sits on the pattern, on highlighted rows and the play head (row
+# index too), and on the selection and the cursor, hovered or not
+_ROW_OVERLAYS = ["GUI_COLOR_PATTERN_HI_1", "GUI_COLOR_PATTERN_HI_2", "GUI_COLOR_PATTERN_PLAY_HEAD"]
+_CELL_OVERLAYS = ["GUI_COLOR_PATTERN_SELECTION", "GUI_COLOR_PATTERN_SELECTION_HOVER",
+                  "GUI_COLOR_PATTERN_CURSOR", "GUI_COLOR_PATTERN_CURSOR_HOVER"]
+_ROW_BGS = [_PATTERN] + [(k,) + _PATTERN for k in _ROW_OVERLAYS]
+_CELL_BGS = _ROW_BGS + [(k,) + _PATTERN for k in _CELL_OVERLAYS]
 _PATTERN_TEXT = ["GUI_COLOR_PATTERN_ACTIVE", "GUI_COLOR_PATTERN_INS", "GUI_COLOR_PATTERN_VOLUME_MAX",
                  "GUI_COLOR_PATTERN_VOLUME_HALF"] + [f"GUI_COLOR_PATTERN_EFFECT_{k}" for k in
                                                      ("INVALID", "PITCH", "VOLUME", "PANNING", "SONG", "TIME",
                                                       "SPEED", "SYS_PRIMARY", "SYS_SECONDARY", "MISC")]
 
-# (text color, background layers from the top down). The C++ check in
-# settings.cpp (FurnaceGUI::drawContrastCheck) checks the same pairs, with the
+# (text color, [its backgrounds, each as layers from the top down]). The C++
+# check in settings.cpp (FurnaceGUI::drawContrastCheck) checks the same, with the
 # widget backgrounds taken from the applied ImGui style so basic mode counts.
 CONTRAST_PAIRS = [
-    ("GUI_COLOR_TEXT", _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_FRAME_BACKGROUND_POPUP",) + _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_MENU_BAR",) + _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_BUTTON",) + _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_WIDGET_BACKGROUND",) + _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_IMGUI_HEADER",) + _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_TAB_ACTIVE",) + _WINDOW),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_TITLE_BACKGROUND_ACTIVE", "GUI_COLOR_BACKGROUND")),
-    ("GUI_COLOR_TEXT", ("GUI_COLOR_TABLE_HEADER",) + _WINDOW),
-    ("GUI_COLOR_ORDER_ROW_INDEX", _WINDOW),
-    ("GUI_COLOR_PATTERN_ROW_INDEX", _PATTERN),
-] + [(k, _PATTERN) for k in _PATTERN_TEXT] + [(k, _CURSOR) for k in _PATTERN_TEXT]
+    ("GUI_COLOR_TEXT", [_WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_FRAME_BACKGROUND_POPUP",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_MENU_BAR",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_BUTTON",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_WIDGET_BACKGROUND",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_IMGUI_HEADER",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_TAB_ACTIVE",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_TITLE_BACKGROUND_ACTIVE", "GUI_COLOR_BACKGROUND")]),
+    ("GUI_COLOR_TEXT", [("GUI_COLOR_TABLE_HEADER",) + _WINDOW]),
+    ("GUI_COLOR_ORDER_ROW_INDEX", [_WINDOW]),
+    ("GUI_COLOR_PATTERN_ROW_INDEX", _ROW_BGS),
+] + [(k, _CELL_BGS) for k in _PATTERN_TEXT]
 
 
 def luminance(rgb):
@@ -150,15 +155,19 @@ def applied(colors, settings=None):
 
 
 def contrast_report(colors, threshold=AA, settings=None):
-    """[(text key, background key, ratio)] for the pairs below threshold, with the
-    colors as drawn under settings (see applied)."""
+    """[(text key, background key, ratio)] for the text colors below threshold on
+    their worst background, with the colors as drawn under settings (see applied)."""
     colors = applied(colors, settings)
     low = []
-    for fg, layers in CONTRAST_PAIRS:
-        bg = flatten(colors, layers)
-        ratio = contrast_ratio(over(colors[fg], bg), bg)
-        if ratio < threshold:
-            low.append((fg, layers[0], ratio))
+    for fg, backgrounds in CONTRAST_PAIRS:
+        worst = None
+        for layers in backgrounds:
+            bg = flatten(colors, layers)
+            ratio = contrast_ratio(over(colors[fg], bg), bg)
+            if worst is None or ratio < worst[2]:
+                worst = (fg, layers[0], ratio)
+        if worst[2] < threshold:
+            low.append(worst)
     return low
 
 
@@ -273,17 +282,19 @@ def _light(dark_items):
             out[key] = rgba
         elif _SURFACE.match(key):
             out[key] = (*from_oklab(*_relight(rgba, True)), rgba[3])
+    ink = [k for k in dark if k not in out]
+    for key in ink:
+        out[key] = (*from_oklab(*_relight(dark[key], False)), dark[key][3])
+    # ink you could read on the dark window stays readable on every light
+    # background it can be drawn on (the overlays above are translucent ink, so
+    # they are relit, never darkened, and these backgrounds stay put)
     dark_bg = flatten(dark, _WINDOW)
-    # ink sits on the window, and pattern ink also under the cursor
-    light_bgs = [flatten(out, _WINDOW), flatten(out, _CURSOR)]
-    for key, rgba in dark.items():
-        if key in out:
-            continue
-        lab = _relight(rgba, False)
-        # ink you could read on the dark window stays readable on the light one
+    light_bgs = [flatten(out, layers) for layers in [_WINDOW] + _CELL_BGS]
+    for key in ink:
+        rgba = dark[key]
         if rgba[3] == 1.0 and contrast_ratio(rgba, dark_bg) >= 3.0:
-            lab = (_darken_to(lab, light_bgs, AA + 0.1), *lab[1:])
-        out[key] = (*from_oklab(*lab), rgba[3])
+            lab = _relight(rgba, False)
+            out[key] = (*from_oklab(_darken_to(lab, light_bgs, AA + 0.1), *lab[1:]), rgba[3])
     return {k: out[k] for k in dark}  # in guiConst.cpp order
 
 

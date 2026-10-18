@@ -32,11 +32,21 @@ def test_preset_header_is_up_to_date():
 
 
 def test_gui_checks_the_same_pairs():
-    # settings.cpp's drawContrastCheck and CONTRAST_PAIRS must list the same pairs
+    # settings.cpp's drawContrastCheck and CONTRAST_PAIRS must check the same pairs
     src = (scheme._REPO / "src" / "gui" / "settings.cpp").read_text(encoding="utf-8")
-    body = src[src.index("const ContrastPair pairs[]={"):]
-    cpp = re.findall(r"\{(GUI_COLOR_\w+),(GUI_COLOR_\w+),", body[:body.index("};")])
-    assert cpp == [(fg, layers[0]) for fg, layers in scheme.CONTRAST_PAIRS]
+    body = src[src.index("void FurnaceGUI::drawContrastCheck"):]
+
+    def table(name):
+        start = body.index(name)
+        return re.findall(r"GUI_COLOR_\w+", body[start + len(name):body.index("};", start)])
+
+    widgets = re.findall(r"\{(GUI_COLOR_\w+),\{\{(GUI_COLOR_\w+),", body[:body.index("};", body.index("pairs={"))])
+    assert widgets == [(fg, bgs[0][0]) for fg, bgs in scheme.CONTRAST_PAIRS[:10]]
+    assert table("patternRowOverlays[]={") == scheme._ROW_OVERLAYS
+    assert table("patternCellOverlays[]={") == scheme._CELL_OVERLAYS
+    assert table("patternText[]={") == scheme._PATTERN_TEXT
+    assert scheme.CONTRAST_PAIRS[10:] == ([("GUI_COLOR_PATTERN_ROW_INDEX", scheme._ROW_BGS)]
+                                          + [(k, scheme._CELL_BGS) for k in scheme._PATTERN_TEXT])
 
 
 def test_contrast_check_flags_unreadable_text():
@@ -46,16 +56,17 @@ def test_contrast_check_flags_unreadable_text():
     assert ("GUI_COLOR_TEXT", "GUI_COLOR_FRAME_BACKGROUND") in low
 
 
-def test_dark_defaults_fail_on_the_cursor():
-    # upstream's own defaults: two effect colors are below AA on black, and seven
-    # pattern colors are below it under the dark blue cursor
-    low = [(fg[10:], bg[10:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
+def test_dark_defaults_fail_under_the_hovered_cursor():
+    # upstream's own defaults: ten pattern colors are below AA, worst of all on
+    # the light blue hovered cursor
+    low = [(fg[18:], bg[18:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
     assert low == [
-        ("PATTERN_EFFECT_TIME", "PATTERN_BG", 3.28), ("PATTERN_EFFECT_MISC", "PATTERN_BG", 3.72),
-        ("PATTERN_INS", "PATTERN_CURSOR", 3.92), ("PATTERN_VOLUME_HALF", "PATTERN_CURSOR", 3.53),
-        ("PATTERN_EFFECT_INVALID", "PATTERN_CURSOR", 2.19), ("PATTERN_EFFECT_SONG", "PATTERN_CURSOR", 2.19),
-        ("PATTERN_EFFECT_TIME", "PATTERN_CURSOR", 1.4), ("PATTERN_EFFECT_SPEED", "PATTERN_CURSOR", 2.79),
-        ("PATTERN_EFFECT_MISC", "PATTERN_CURSOR", 1.59)]
+        ("INS", "CURSOR_HOVER", 2.69), ("VOLUME_MAX", "CURSOR_HOVER", 4.37),
+        ("VOLUME_HALF", "CURSOR_HOVER", 2.42), ("EFFECT_INVALID", "CURSOR_HOVER", 1.5),
+        ("EFFECT_VOLUME", "CURSOR_HOVER", 4.37), ("EFFECT_SONG", "CURSOR_HOVER", 1.5),
+        ("EFFECT_TIME", "CURSOR_HOVER", 1.04), ("EFFECT_SPEED", "CURSOR_HOVER", 1.91),
+        ("EFFECT_SYS_SECONDARY", "CURSOR_HOVER", 4.46), ("EFFECT_MISC", "CURSOR_HOVER", 1.09)]
+
 
 
 def test_contrast_ratio_matches_wcag():

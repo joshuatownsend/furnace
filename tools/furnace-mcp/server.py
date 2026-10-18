@@ -506,9 +506,9 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
                      f"then plays {notation.note_name(108 + t['target_semitones'])}")
     x = fsong.sample_pcm(smp)
     level = analysis.full_scale(smp.get("depth"))
-    clipped = analysis.clipped_runs(x, level)
+    at = np.flatnonzero(analysis.clipped_mask(x, level))
+    clipped = len(at)
     if clipped:
-        at = np.flatnonzero((x >= level - 1e-6) | (x <= -1 + 1e-6))
         lines.append(f"clipping: {clipped} samples sit flat at full scale ({100 * clipped / len(x):.1f}% "
                      f"of the sample, between samples {at[0]} and {at[-1]}). Unless it's a "
                      "square wave drawn at full scale, that's clipping in the recording, "

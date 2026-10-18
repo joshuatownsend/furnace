@@ -408,17 +408,22 @@ def full_scale(depth):
     return 127 / 128 if depth == 8 else 32767 / 32768
 
 
-def clipped_runs(x, level):
-    """Samples of x that sit at full scale next to another one on the same rail:
-    flat tops, the mark of clipping. A lone peak isn't counted, and neither is a
-    jump straight from one rail to the other."""
+def clipped_mask(x, level):
+    """Which samples of x sit at full scale next to another one on the same rail:
+    flat tops, the mark of clipping. A lone peak isn't one, and neither is a jump
+    straight from one rail to the other."""
     x = np.asarray(x)
     if len(x) < 2:
-        return 0
+        return np.zeros(len(x), bool)
     # PCM is asymmetric: the negative rail is -1 (-128/128, -32768/32768)
     pos, neg = x >= level - 1e-6, x <= -1 + 1e-6
     pair = (pos[1:] & pos[:-1]) | (neg[1:] & neg[:-1])
-    return int((np.r_[pair, False] | np.r_[False, pair]).sum())
+    return np.r_[pair, False] | np.r_[False, pair]
+
+
+def clipped_runs(x, level):
+    """How many samples of x are clipped (see clipped_mask)."""
+    return int(clipped_mask(x, level).sum())
 
 
 def sample_segment(x, loop=None):

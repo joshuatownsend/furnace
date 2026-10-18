@@ -6,11 +6,13 @@ table) and rendered per channel:
 
     A  ch1 note 60  degree 0  -> C-4 E580   on 0.2 s, off 2.5 s
     B  ch1 note 61  degree 1  -> C-4 E5B2   on 0.5 s, off 1.5 s
+    D  ch3 note 60  not in the table -> C-4  on 1.55 s, off 1.65 s
     C  ch2 note 91  degree 62 -> C-6 E580   on 1.7 s, off 2.3 s
 
 A and B round to the same note. Released by note, letting go of B would stop
 A too; released by key, A keeps sounding. C lands on B's old channel and must
-not inherit B's detune.
+not inherit B's detune; nor must D, a key the table doesn't have, which
+plays its plain note on B's old channel just before C.
 
     python spike_019_live.py [out_dir]
 """
@@ -32,7 +34,7 @@ REPO = HERE.parents[3]
 DEMO = REPO / "demos/genesis/All Good Times.fur"
 PRESET = HERE.parents[1] / "tests/fixtures/lumatone/A-008-31ET-bosanquet.ltn"
 TICK = 1 / 60
-KEYS = {"A": (1, 60, 0.2, 2.5), "B": (1, 61, 0.5, 1.5), "C": (2, 91, 1.7, 2.3)}
+KEYS = {"A": (1, 60, 0.2, 2.5), "B": (1, 61, 0.5, 1.5), "D": (3, 60, 1.55, 1.65), "C": (2, 91, 1.7, 2.3)}
 
 
 def blank_song():
@@ -66,7 +68,7 @@ def window(x, rate, t0, t1):
 def run(out):
     table = tuning.key_table(tuning.read_ltn(PRESET), tuning.edo(31))
     for name, (ch, note, _, _) in KEYS.items():
-        print(f"key {name}: ch{ch} note {note} -> {table[ch, note]}")
+        print(f"key {name}: ch{ch} note {note} -> {table.get((ch, note), 'not in the table')}")
     song = blank_song()
     src = out / "live.json"
     src.write_text(json.dumps(song))
@@ -78,7 +80,7 @@ def run(out):
     fsong.run(["-loops", 0, "-livetest", events, "-output", wav, "-outmode", "perchan",
                "-exportchans", "1-3", src])
     c4 = note_hz(parse_note("C-4"))
-    spans = [(0.3, 0.45), (0.6, 1.4), (1.6, 1.68), (1.8, 2.2), (2.35, 2.45), (2.6, 3.0)]
+    spans = [(0.3, 0.45), (0.6, 1.4), (1.57, 1.64), (1.8, 2.2), (2.35, 2.45), (2.6, 3.0)]
     for f in sorted(out.glob("live_c*.wav")):
         x, rate = read_wav(f)
         x = x.mean(axis=1) if x.ndim > 1 else x

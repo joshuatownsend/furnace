@@ -1715,9 +1715,12 @@ void DivEngine::playSub(bool preserveDrift, int goalRow) {
   std::chrono::high_resolution_clock::time_point timeStart=std::chrono::high_resolution_clock::now();
   for (int i=0; i<song.systemLen; i++) disCont[i].dispatch->setSkipRegisterWrites(false);
   reset();
-  // fork prototype (ideas/019): each pass of a per-channel export replays -livetest
-  liveTestPos=0;
-  liveTestTick=0;
+  // fork prototype (ideas/019): each pass of a per-channel export replays
+  // -livetest, but a loop back (preserveDrift) carries on where it was
+  if (!preserveDrift) {
+    liveTestPos=0;
+    liveTestTick=0;
+  }
   if (preserveDrift && curOrder==0) {
     logV("preserveDrift && curOrder is true");
     return;
@@ -3818,12 +3821,16 @@ void DivEngine::autoNoteOff(int ch, int note, int vol, int key) {
 // fork prototype (ideas/019)
 void DivEngine::midiNoteIn(int ch, int note, int vel, int ins, bool on) {
   if (ch<0 || ch>15 || note<0 || note>127) return;
-  if (microKeys && microNote[ch][note]>=0) {
+  if (microKeys) {
+    // keys not in the table play their plain note, with no detune: the
+    // channel may still hold the last key's. All keys release by key.
     int key=(ch<<7)|note;
+    bool mapped=microNote[ch][note]>=0;
+    int n=mapped?microNote[ch][note]:(note-12+60);
     if (on) {
-      autoNoteOn(ch,ins,microNote[ch][note],vel,0,microPitch[ch][note]-0x80,key);
+      autoNoteOn(ch,ins,n,vel,0,mapped?(microPitch[ch][note]-0x80):0,key);
     } else {
-      autoNoteOff(ch,microNote[ch][note],vel,key);
+      autoNoteOff(ch,n,vel,key);
     }
     return;
   }

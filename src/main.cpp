@@ -609,8 +609,10 @@ TAParamResult pLiveTest(String val) {
   int a=0, b=0, c=0, d=0, lineNum=0;
   while (fgets(line,sizeof(line),f)!=NULL) {
     lineNum++;
-    if (line[0]=='#' || line[0]=='\n' || line[0]=='\r') continue;
+    what[0]=0;
     int n=sscanf(line,"%15s %d %d %d %d",what,&a,&b,&c,&d);
+    // blank (or whitespace-only) lines and comments
+    if (n<1 || what[0]=='#') continue;
     String w=what;
     if (w=="key" && n==5) {
       liveTestKeys.insert(liveTestKeys.end(),{a-1,b,c,d});

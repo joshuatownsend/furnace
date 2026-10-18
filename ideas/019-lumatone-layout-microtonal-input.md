@@ -230,11 +230,12 @@ The prototype, about 100 lines, all marked "fork prototype (ideas/019)":
 |---|---|---|---|
 | A: ch1 note 60, held 0.2-2.5 s | C-4 `E580` | C-4 the whole time, through B's release; off after 2.5 s | — |
 | B: ch1 note 61, held 0.5-1.5 s | C-4 `E5B2` (+39.1) | — | +40.3 cents; off after 1.5 s |
-| C: ch2 note 91, held 1.7-2.3 s | C-6 `E580` | — | C-6 +1.6 cents: no leftover detune from B |
+| D: ch3 note 60, held 1.55-1.65 s | not in the table: plain C-4 | — | C-4 +1.7 cents: no leftover detune from B |
+| C: ch2 note 91, held 1.7-2.3 s | C-6 `E580` | — | C-6 +1.6 cents: no leftover detune |
 
-A and B round to the same note. Released by note, as before the prototype, letting go of B would have stopped A as well. Released by key, A keeps playing. All 178 furnace-mcp tests pass on the prototype build.
+While a table is on, keys missing from it play their plain note with the detune cleared, and every key releases by key. A and B round to the same note. Released by note, as before the prototype, letting go of B would have stopped A as well. Released by key, A keeps playing. All 178 furnace-mcp tests pass on the prototype build.
 
-**Not done in step 4:** recording (the GUI side, step 6). Nothing has been tried with a real keyboard. One known edge: a key that isn't in the table releases by note, so if it rounds to the same note as a key that is in the table, releasing it stops both.
+**Not done in step 4:** recording (the GUI side, step 6). Nothing has been tried with a real keyboard.
 
 ### Where this leaves the decision
 

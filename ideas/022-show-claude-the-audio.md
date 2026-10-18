@@ -137,7 +137,7 @@ Josh accepted the token cost, so items 2-4 were built after the spike:
 - **`detect_sample_pitch(image=True)`:** the sample with the measured part shaded and the loop points marked, plus the loop seam close up (the end of the loop joined to its start, as it plays).
 - **`export_video(preview=True)`:** 8 real frames from the video renderer, tiled by ffmpeg with grey borders between frames. It skips drawing and encoding the rest.
 
-A hands-on tour of all four (#15) led to five fixes:
+A hands-on tour of all four led to these fixes (#15):
 
 - Video preview frames are offset, so they no longer all land on the same beat.
 - Close-ups are numbered and labelled by duration, so an arp macro no longer makes "4 cycles" wrong.

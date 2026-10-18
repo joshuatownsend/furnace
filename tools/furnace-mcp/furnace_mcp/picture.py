@@ -60,6 +60,17 @@ def order_starts(song):
     return [0.0] + times[:-1], times[-1]
 
 
+def _silent(x, block=2048):
+    """True when x only sits at constant levels: idle chips can hold an offset, or
+    step to one when the song starts, which peak-to-peak would count as sound.
+    A step moves one block; anything audible moves more than one."""
+    n = len(x) // block * block
+    if not n:
+        return True
+    blocks = x[:n].reshape(-1, block, x.shape[1])
+    return int((blocks.std(axis=1).max(axis=1) >= SILENT).sum()) <= 1
+
+
 def _ticks(total, width):
     """Time-axis tick step in seconds: the smallest nice step at least 70 px apart."""
     for step in (0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300):
@@ -95,7 +106,11 @@ def _draw_wave(img, x0, y0, w, h, x, color):
     y_top = np.clip(np.round(mid - top * half), y0, y0 + h - 1).astype(int)
     y_bot = np.clip(np.round(mid - bot * half), y0, y0 + h - 1).astype(int)
     for c in range(w):
-        img[y_top[c]:y_bot[c] + 1, x0 + c] = _CLIPPED if clipped[c] else color
+        img[y_top[c]:y_bot[c] + 1, x0 + c] = color
+    # a clipped column must show at a glance: one red pixel in a dense waveform
+    # doesn't, so each one gets a 3 px band the height of the row
+    for c in np.flatnonzero(clipped):
+        img[y0:y0 + h, x0 + max(c - 1, 0):x0 + min(c + 2, w)] = _CLIPPED
     return float(np.abs(x).max())
 
 
@@ -149,8 +164,7 @@ def draw(mix_wav, channels, starts, out_png, *, first_order=0, width=1200,
     waves, silent = [], []
     for label, path in channels:
         cx, _ = read_wav(path)
-        # spread, not peak-to-peak: some chips sit at a constant offset when idle
-        (silent if not len(cx) or cx.std() < SILENT else waves).append((label, cx))
+        (silent if _silent(cx) else waves).append((label, cx))
     # the time axis is the WAV's: furnace's timing walk can run a few ticks longer
     total = max(len(x), 1) / rate
 

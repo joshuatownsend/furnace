@@ -31,6 +31,15 @@ def test_columns_mark_clipping():
     assert bot[6] == pytest.approx(-0.5) and top[6] == 0
 
 
+def test_silent_ignores_offsets_but_not_quiet_sound():
+    x = np.full((44100, 2), 0.035, np.float32)
+    x[:3000] = 0  # an idle chip stepping to its offset as the song starts
+    assert picture._silent(x)
+    t = np.arange(44100) / 44100
+    tone = 0.005 * np.sin(2 * np.pi * 220 * t)  # about -46 dBFS
+    assert not picture._silent(np.stack([tone, tone], axis=1))
+
+
 def _one_note_per_order():
     """Three orders of the demo where only channel 0 plays: one note at row 0 of
     each order. Order 1 sets both speeds to 2 (09xx and 0Fxx), so its rows are

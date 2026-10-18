@@ -107,11 +107,12 @@ def save(song, path):
         tmp.unlink(missing_ok=True)
 
 
-def render(song, wav_path, per_channel=False):
+def render(song, wav_path, per_channel=False, channels=None):
     """Render a song dict to WAV. Returns [(channel or None, path)].
 
     Per-channel renders name files <stem>_cNN.wav (1-based) and can skip
-    channels, so the channel comes from the file name, not the position."""
+    channels, so the channel comes from the file name, not the position.
+    channels (0-based) limits a per-channel render to those channels."""
     wav_path = Path(wav_path)
     with tempfile.TemporaryDirectory() as td:
         src = Path(td) / "song.json"
@@ -119,6 +120,8 @@ def render(song, wav_path, per_channel=False):
         args = ["-loops", 0, "-output", wav_path]
         if per_channel:
             args += ["-outmode", "perchan"]
+            if channels is not None:
+                args += ["-exportchans", ",".join(str(c + 1) for c in channels)]
         run([*args, src], timeout=1800)
     if per_channel:
         out = []

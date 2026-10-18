@@ -474,6 +474,41 @@ TAParamResult pOutMode(String val) {
   return TA_PARAM_SUCCESS;
 }
 
+// channels for -outmode perchan, numbered like its files (from 1): 1-4,7
+TAParamResult pExportChans(String val) {
+  memset(exportOptions.channelMask,0,DIV_MAX_CHANS*sizeof(bool));
+  size_t pos=0;
+  while (pos<=val.size()) {
+    size_t comma=val.find(',',pos);
+    if (comma==String::npos) comma=val.size();
+    String part=val.substr(pos,comma-pos);
+    size_t dash=part.find('-');
+    int first=0, last=0;
+    try {
+      size_t used=0;
+      first=std::stoi(part.substr(0,dash),&used);
+      if (used!=(dash==String::npos?part.size():dash)) throw std::invalid_argument("trailing text");
+      last=first;
+      if (dash!=String::npos) {
+        String second=part.substr(dash+1);
+        last=std::stoi(second,&used);
+        if (used!=second.size()) throw std::invalid_argument("trailing text");
+      }
+    } catch (std::exception& e) {
+      first=0;
+    }
+    if (first<1 || last<first || last>DIV_MAX_CHANS) {
+      logE("invalid channel list! use channel numbers from 1 and ranges, e.g. 1-4,7.");
+      return TA_PARAM_ERROR;
+    }
+    for (int i=first; i<=last; i++) {
+      exportOptions.channelMask[i-1]=true;
+    }
+    pos=comma+1;
+  }
+  return TA_PARAM_SUCCESS;
+}
+
 TAParamResult pOutFormat(String val) {
   if (hasOutFormat) {
     logE("the output format is already set.");
@@ -737,6 +772,7 @@ void initParams() {
   params.push_back(TAParam("l","loops",true,pLoops,"<count>","set number of loops"));
   params.push_back(TAParam("s","subsong",true,pSubSong,"<number>","set sub-song"));
   params.push_back(TAParam("","outmode",true,pOutMode,"one|persys|perchan","set file output mode"));
+  params.push_back(TAParam("","exportchans",true,pExportChans,"<list>","with -outmode perchan, export only these channels (from 1, e.g. 1-4,7)"));
   params.push_back(TAParam("S","safemode",false,pSafeMode,"","enable safe mode (software rendering and no audio)"));
   params.push_back(TAParam("A","safeaudio",false,pSafeModeAudio,"","enable safe mode (with audio"));
 

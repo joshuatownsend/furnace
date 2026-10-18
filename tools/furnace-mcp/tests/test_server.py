@@ -308,6 +308,16 @@ def test_save_stages_next_to_the_song(demo, monkeypatch):
     assert seen and seen[0].parent == Path(demo).parent and not seen[0].exists()
 
 
+
+async def test_exportchans_renders_only_those_channels(tmp_path):
+    song = fsong.excerpt(fsong.load(DEMO), 0, 2, 2)
+    files = fsong.render(song, tmp_path / "ch.wav", per_channel=True, channels=[0, 9])
+    assert [c for c, _ in files] == [0, 9]
+    # channels 2-5 are the operators of extended FM channel 3: they export as one file under 2
+    files = fsong.render(song, tmp_path / "op.wav", per_channel=True, channels=[3, 4])
+    assert [c for c, _ in files] == [2]
+
+
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not on PATH")
 async def test_export_video(demo, tmp_path):
     out = tmp_path / "scopes.mp4"

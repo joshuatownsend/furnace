@@ -9,9 +9,11 @@ Usage: python -m furnace_mcp.video SONG OUT.mp4 [--orders 0-3] [--size 1920x1080
 
 import argparse
 import math
+import os
 import shutil
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +23,7 @@ from . import song as fsong
 from .analysis import read_wav
 
 _FONT = fscheme._REPO / "res" / "fonts" / "IBMPlexSans-Regular.otf"  # Furnace's UI font
-SILENT = 1e-3  # a channel whose peak stays under this is left out
+SILENT = 1e-3  # a channel that moves less than this is left out
 
 
 def layout(n, width, height, aspect=2.0):
@@ -113,6 +115,28 @@ class Scope:
         self.edges = rising_edges(x, 0.1 * self.peak)
 
 
+def _shown_channels(song, sub_index):
+    """Channels not hidden from Furnace's Channel Oscilloscope."""
+    data = fsong.subsong(song, sub_index).get("channelData") or []
+    return [ch for ch in range(len(fsong.channel_labels(song)))
+            if ch >= len(data) or (data[ch].get("show") or {}).get("chanOsc", True)]
+
+
+def _render(song, channels, workdir):
+    """(mix WAV, [(channel, WAV)]), rendered by several furnace processes at once:
+    a per-channel render plays the whole song once per channel, so it is the slow part."""
+    workers = max(1, min(len(channels), (os.cpu_count() or 2) // 2))
+    groups = [channels[k::workers] for k in range(workers)]
+    with ThreadPoolExecutor(workers + 1) as pool:
+        mix = pool.submit(fsong.render, song, workdir / "mix.wav")
+        parts = pool.map(lambda k: fsong.render(song, workdir / f"g{k}.wav", per_channel=True,
+                                                channels=groups[k]), range(workers))
+        # an extended channel's operators come back as one file under the first
+        # operator, from each group that asked for one of them: keep one
+        files = sorted(dict(f for part in parts for f in part).items())
+        return mix.result()[0][1], files
+
+
 def _channel_scopes(song, files, colors, color_mode, sub_index):
     labels = fsong.channel_labels(song)
     data = (fsong.subsong(song, sub_index).get("channelData") or [])
@@ -121,12 +145,10 @@ def _channel_scopes(song, files, colors, color_mode, sub_index):
     scopes = []
     for ch, path in files:
         cd = data[ch] if ch < len(data) else {}
-        if not (cd.get("show") or {}).get("chanOsc", True):
-            continue  # hidden from the Channel Oscilloscope in Furnace
         x, rate = read_wav(path)
         mono = x.mean(axis=1)
-        if np.abs(mono).max() < SILENT:
-            continue
+        if np.ptp(mono) < SILENT:
+            continue  # silent, or a constant offset (nothing to draw)
         if color_mode == "channel":
             c = cd.get("color")
             color = ((c["r"] / 255, c["g"] / 255, c["b"] / 255, 1.0) if c
@@ -140,11 +162,11 @@ def _channel_scopes(song, files, colors, color_mode, sub_index):
 
 def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
                width=1920, height=1080, fps=60, window_ms=40.0, colors=None,
-               color_mode="mono", labels=True, ffmpeg="ffmpeg", crf=18):
+               color_mode="mono", labels=True, ffmpeg="ffmpeg", crf=18, preset="medium"):
     """Write an mp4 (H.264 + AAC, yuv420p: what YouTube expects) with one scope per
     audible channel. colors: a scheme dict from scheme.read/defaults (default: the
-    colors Furnace uses now, see scheme.current). color_mode: "mono" (OSC_WAVE for every channel) or
-    "channel" (each channel's custom color, else one color per chip).
+    colors Furnace uses now, see scheme.current). color_mode: "mono" (OSC_WAVE for
+    every channel) or "channel" (each channel's custom color, else one color per chip).
     Returns a dict describing what was made."""
     if color_mode not in ("mono", "channel"):
         raise ValueError(f"color_mode must be mono or channel, not {color_mode!r}")
@@ -165,8 +187,10 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
 
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
-        (_, mix), = fsong.render(ex, td / "mix.wav")
-        files = fsong.render(ex, td / "ch.wav", per_channel=True)
+        shown = _shown_channels(song, sub_index)
+        if not shown:
+            raise ValueError("every channel is hidden from the Channel Oscilloscope")
+        mix, files = _render(ex, shown, td)
         scopes, rate = _channel_scopes(song, files, colors, color_mode, sub_index)
         if not scopes:
             raise ValueError("every channel is silent in that range; nothing to draw")
@@ -203,7 +227,7 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
                "-i", str(mix)]
         if vf:
             cmd += ["-vf", ",".join(vf)]
-        cmd += ["-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p",
+        cmd += ["-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, cwd=td)
         try:

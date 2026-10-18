@@ -89,7 +89,7 @@ Read from the Lumatone Editor source (`hsstraub/TerpstraSysEx.2014`, BSD-3-Claus
 
 - 53-EDO: every board uses notes 58-110 on its own channel 1-5. Each channel is one octave (53 steps).
 - 31-EDO: boards 0-3 use channel 1 with notes 0-123, 31 apart per board. Board 4 repeats board 3's notes on channel 2, so channel 2 means "31 steps higher".
-- 12-EDO: every board spans one octave of note numbers (24-35, 36-47, ...) spread over channels 1-6. The file doesn't say what the channel means here (probably octave; check).
+- 12-EDO: every board spans one octave of note numbers (24-35, 36-47, ...) spread over channels 1-6. The file doesn't say what the channel means here (probably octave; check). *Checked in the spike: the channel means nothing here; see "Spike results", step 1.*
 
 So the import needs a rule, "steps per channel". Default to "one period per channel" (which fits the 31 and 53 presets), and let Michael change it. How his current synth reads channels is an open question.
 
@@ -182,7 +182,7 @@ The check: each key gets a position on the hex grid (from the Lumatone Editor's 
 
 ### Step 2: how well chips hold the detune
 
-`examples/spike_019_scales.py` plays every 31 and 53-EDO step from written C-2 to C-6 and measures it. Numbers are cents after taking out each chip's overall offset (YM2612 -2.6, SN76489 +4, NES +2). "Best" is what the chip's own registers allow: the worst error if every step got the nearest period.
+`examples/spike_019_scales.py` plays every 31 and 53-EDO step from written C-2 to C-6 and measures it. Numbers are cents after taking out the test note's overall offset, a few cents either way. The YM2612 read -2.6 here and -4.7 to -5.9 in steps 3 and 4, so the offset depends on the measuring window and may come from the default instrument rather than the chip. The errors relative to it don't change. "Best" is what the chip's own registers allow: the worst error if every step got the nearest period.
 
 **31-EDO** (step 38.7 cents), worst error per written octave:
 
@@ -197,7 +197,7 @@ The check: each key gets a position on the hex grid (from the Lumatone Editor's 
 
 - **FM is fine everywhere**: within 3 cents in every octave, mean about 0.6.
 - **SN76489 and NES are fine in the low octaves.** From written C-4 on the SN, and C-5 on the NES, close steps blur or merge.
-- **Furnace makes period chips two to three times worse than they need to be.** Most detuned notes land on the nearest period, but some land one period off. The shared pitch table (`pitchTable.cpp`) interpolates in a straight line inside each semitone and rounds the root and the slope separately. Computing the period directly for detuned notes would bring the SN and NES columns down to "best". That would be a separate fork fix, and it would also help idea 021. The script measures it.
+- **Furnace makes period chips two to three times worse than they need to be.** Most detuned notes land on the nearest period, but some land one period off: degree 84 of 31-EDO on the SN plays period 65 off by 36 cents, where 9.5 was possible. The likely cause is the shared pitch table (`pitchTable.cpp`), which interpolates in a straight line inside each semitone and rounds the root and the slope separately. Computing the period directly might bring the SN and NES columns down to "best". The fix is untried. It would be a separate fork fix that also helps idea 021, and the script would measure it.
 
 ### Step 3: effects with a detune
 
@@ -234,7 +234,7 @@ The prototype, about 100 lines, all marked "fork prototype (ideas/019)":
 
 A and B round to the same note. Released by note, as before the prototype, letting go of B would have stopped A as well. Released by key, A keeps playing. All 178 furnace-mcp tests pass on the prototype build.
 
-**Not done in step 4:** recording (the GUI side, step 6). Nothing has been tried with a real keyboard.
+**Not done in step 4:** recording (the GUI side, step 6). Nothing has been tried with a real keyboard. One known edge: a key that isn't in the table releases by note, so if it rounds to the same note as a key that is in the table, releasing it stops both.
 
 ### Where this leaves the decision
 

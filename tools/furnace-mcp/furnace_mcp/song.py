@@ -576,3 +576,73 @@ def pitch_probes(song, sub_index=0):
                                         release_rows=0, sub_index=sub_index)
             yield ci, name, first, out, on, off
         first += n
+
+
+# --- samples (idea 005) ---------------------------------------------------
+
+# DivSampleDepth (src/engine/sample.h)
+SAMPLE_DEPTHS = {0: "1-bit ZX drum", 1: "1-bit DPCM", 3: "YMZ ADPCM", 4: "QSound ADPCM",
+                 5: "ADPCM-A", 6: "ADPCM-B", 7: "K053260 ADPCM", 8: "8-bit PCM", 9: "BRR",
+                 10: "VOX ADPCM", 11: "8-bit mu-law PCM", 12: "C219 PCM", 13: "IMA ADPCM",
+                 14: "12-bit PCM", 16: "16-bit PCM"}
+LOOP_MODES = ("forward", "backward", "ping-pong")
+
+
+def sample(song, index):
+    samples = song.get("samples") or []
+    if not 0 <= index < len(samples):
+        raise IndexError(f"sample {index} out of range (the song has {len(samples)} samples"
+                         + (f", 00-{len(samples) - 1:02X})" if samples else ")"))
+    return samples[index]
+
+
+def sample_pcm(smp):
+    """A sample's audio as floats in -1..1. Only PCM depths can be read from the
+    JSON (it holds the sample in its stored format); others raise ValueError."""
+    import numpy as np
+    depth = smp.get("depth")
+    raw = bytes(smp.get("data") or [])
+    if depth == 16:
+        return np.frombuffer(raw[:len(raw) // 2 * 2], dtype="<i2").astype(np.float64) / 32768.0
+    if depth == 8:
+        return np.frombuffer(raw, dtype=np.int8).astype(np.float64) / 128.0
+    raise ValueError(
+        f"can't analyse depth {depth} ({SAMPLE_DEPTHS.get(depth, 'unknown')}) samples, only 8- and "
+        "16-bit PCM. Converting it to 16-bit in Furnace's sample editor makes it readable.")
+
+
+def sample_loop(smp):
+    """(start, end, mode) of an enabled loop, else None. end is exclusive."""
+    loop = smp.get("loop") or {}
+    start, end = loop.get("start", -1), loop.get("end", -1)
+    if not loop.get("enabled") or start < 0 or end <= start:
+        return None
+    return start, min(end, smp.get("samples", end)), loop.get("mode", 0)
+
+
+def nominal_center_rate(song):
+    """The rate at which a sample's 32-sample cycle plays a C-4: 8372 Hz since
+    dev256, 8363 Hz in songs that keep the old tracker convention
+    (compatFlags.oldCenterRate, set on files saved before dev256 and MOD/S3M/XM/IT
+    imports)."""
+    return 8363.0 if (song.get("compatFlags") or {}).get("oldCenterRate") else 8372.0
+
+
+def sample_instruments(song, index):
+    """Instruments that play this sample: sample instruments, or synth
+    instruments with "use sample" on, through their initial sample or, with a
+    note map, any mapped entry (DivInstrumentAmiga::getSample)."""
+    out = []
+    for i, ins in enumerate(song.get("instruments") or []):
+        amiga = ins.get("amiga") or {}
+        if ins.get("type", 0) not in SAMPLE_INS_TYPES and not amiga.get("useSample"):
+            continue
+        if amiga.get("useWave"):  # wavetable mode plays no sample (amiga.cpp, snes.cpp)
+            continue
+        if amiga.get("useNoteMap"):
+            used = {m.get("map") for m in amiga.get("sampleMap") or []}
+        else:
+            used = {amiga.get("initSample")}
+        if index in used:
+            out.append(i)
+    return out

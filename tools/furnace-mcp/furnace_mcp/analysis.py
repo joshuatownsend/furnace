@@ -152,13 +152,10 @@ def envelope(x, rate, note_off_s):
     }
 
 
-def _yin(x, rate, fmin=25.0, fmax=5000.0, threshold=0.15):
-    """Fundamental frequency by YIN (cumulative-mean-normalised difference)."""
+def _cmnd(x, tmax):
+    """YIN's cumulative-mean-normalised difference for lags 0..tmax: near 0 at
+    the signal's period, near 1 where it doesn't repeat."""
     n = len(x)
-    tmax = min(int(rate / fmin), n // 2)
-    tmin = max(2, int(rate / fmax))
-    if tmax <= tmin + 2:
-        return None
     w = n - tmax
     # difference function d(t) = sum (x[i] - x[i+t])^2 over a window of w samples
     size = 1 << int(np.ceil(np.log2(n + w)))
@@ -169,6 +166,17 @@ def _yin(x, rate, fmin=25.0, fmax=5000.0, threshold=0.15):
     d[0] = 0.0
     cmnd = np.ones_like(d)
     cmnd[1:] = d[1:] * np.arange(1, tmax + 1) / np.maximum(np.cumsum(d[1:]), 1e-12)
+    return cmnd
+
+
+def _yin(x, rate, fmin=25.0, fmax=5000.0, threshold=0.15):
+    """Fundamental frequency by YIN (cumulative-mean-normalised difference)."""
+    n = len(x)
+    tmax = min(int(rate / fmin), n // 2)
+    tmin = max(2, int(rate / fmax))
+    if tmax <= tmin + 2:
+        return None
+    cmnd = _cmnd(x, tmax)
     tau = None
     for i in range(tmin, tmax):
         if cmnd[i] < threshold:
@@ -371,3 +379,204 @@ def format_note_report(r):
                      + " ".join(f"{v:g}" for v in t["harmonics_db"])
                      + f"; brightness {t['centroid_harmonic']}x fundamental")
     return "\n".join(lines)
+
+
+# --- sample pitch (idea 005) ----------------------------------------------
+
+SEGMENT_MAX = 1 << 16   # samples measured at most
+TILE_TO = 16384         # a short loop is repeated to this length, as it plays
+MAX_APERIODICITY = 0.3  # YIN's dip at the period must reach this low...
+MIN_HARMONICITY = 0.6   # ...and this share of the energy must sit on its harmonics
+
+
+def _holds_cycles(body):
+    """Whether a loop body, repeated forward, repeats at least twice within
+    itself (its first clear YIN dip is at or below two thirds of its length)."""
+    n = len(body)
+    if n < 6:
+        return False
+    tiled = np.tile(np.asarray(body, dtype=np.float64), 4)
+    tiled = tiled - tiled.mean()
+    cmnd = _cmnd(tiled, n)
+    dips = np.nonzero(cmnd[2:n] < 0.15)[0]
+    return len(dips) > 0 and dips[0] + 2 <= n * 2 / 3
+
+
+def sample_segment(x, loop=None):
+    """The steady part of a sample to measure: (audio, description).
+
+    A looped sample is measured on its loop, repeated as it plays: that is what
+    holds a note. A backward loop has the same period as a forward one. A
+    ping-pong loop holding several cycles is measured forward too (the turn-
+    around only adds a slow repeat), but one holding a single cycle or less is
+    measured as it plays, forward then back: half a cycle only becomes a whole
+    one that way.
+    Otherwise the part from the end of the attack until it fades 30 dB below its
+    peak."""
+    if loop:
+        start, end, mode = loop
+        body = x[start:end]
+        if mode == 2 and len(body) >= 2 and not _holds_cycles(body):  # DIV_SAMPLE_LOOP_PINGPONG
+            body = np.concatenate((body, body[::-1]))
+        if len(body) >= 2:
+            if len(body) < TILE_TO:
+                body = np.tile(body, -(-TILE_TO // len(body)))
+            return body[:SEGMENT_MAX], f"the loop ({start}-{end})"
+    n = len(x)
+    win = 256 if n >= 256 * 16 else max(16, n // 16)
+    if n < win * 4:
+        return x, "the whole sample"
+    frames = x[:n - n % win].reshape(-1, win)
+    db = 20 * np.log10(np.maximum(np.sqrt(np.mean(frames ** 2, axis=1)), 1e-9))
+    top = float(db.max())
+    attack_end = int(np.argmax(db > top - 3))
+    loud = np.nonzero(db > top - 30)[0]
+    a, b = (attack_end + 1) * win, (int(loud[-1]) + 1) * win
+    if b - a < min(2048, n // 2):  # short or percussive: everything from the attack on
+        a, b = attack_end * win, n
+    if b - a < 64 <= n:  # a very short one-shot: keep enough to measure
+        a, b = 0, n
+    b = min(b, a + SEGMENT_MAX)
+    return x[a:b], ("the whole sample" if (a, b) == (0, n) else f"samples {a}-{b}")
+
+
+def _harmonics(mag, binhz, f0, rate, n):
+    """Per harmonic of f0 (up to 40, below Nyquist): (k, power in a narrow band
+    around it, interpolated peak Hz or None, peak magnitude), plus the power
+    from f0/2 up to the last harmonic. Bands are at least the Hann main lobe
+    wide (2.5 bins of the unpadded length n), so a short sample's broad peaks
+    still count."""
+    lobe = 2.5 * rate / n
+    kmax = max(1, int(min(rate / 2 * 0.95, 40 * f0) / f0))
+    power = mag ** 2
+    mask = np.zeros(len(mag), dtype=bool)
+    out = []
+    for k in range(1, kmax + 1):
+        half = min(max(min(0.02 * k * f0, f0 / 6), lobe), f0 / 2) / binhz
+        lo, hi = max(int(k * f0 / binhz - half), 1), min(int(k * f0 / binhz + half) + 1, len(mag))
+        if hi - lo < 3:
+            continue
+        fresh = ~mask[lo:hi]
+        mask[lo:hi] = True
+        i = lo + int(np.argmax(mag[lo:hi]))
+        hz = None
+        if i not in (lo, hi - 1):
+            a, b, c = (np.log(mag[j] + 1e-12) for j in (i - 1, i, i + 1))
+            den = a - 2 * b + c
+            hz = (i + (0.5 * (a - c) / den if den else 0.0)) * binhz
+        out.append((k, float(power[lo:hi][fresh].sum()), hz, float(mag[i])))
+    lo_all = max(int(f0 * 0.5 / binhz), 1)
+    hi_all = min(int((kmax + 0.5) * f0 / binhz), len(mag))  # Nyquist bin included
+    return out, float(power[lo_all:hi_all].sum())
+
+
+def detect_pitch(x, rate, fmin=20.0, fmax=None):
+    """Fundamental of a monophonic sound (rate = the rate it plays at).
+
+    YIN finds the period (it doesn't fall for a weak fundamental the way an FFT
+    peak does, and its first clear dip avoids octave-down errors); the
+    harmonics' spectral peaks then refine it. Returns {"hz", "period" (samples),
+    "aperiodicity", "harmonicity", "confidence"}, or {"hz": None, "reason"} when
+    there's no clear pitch (noise, drums, chords)."""
+    x = np.asarray(x, dtype=np.float64)
+    x = x - x.mean() if len(x) else x
+    if len(x) < 64 or np.sqrt(np.mean(x ** 2)) < 1e-4:
+        return {"hz": None, "reason": "silent or too short"}
+    # search down to a 2-sample period: short chip loops can be 2 or 3 samples
+    fmax = rate / 2 if fmax is None else min(fmax, rate / 2)
+    tmin = max(2, int(rate / fmax))
+    tmax = min(int(rate / fmin), len(x) // 2)
+    if tmax <= tmin + 2:
+        return {"hz": None, "reason": "too short to hold a cycle"}
+    cmnd = _cmnd(x[:tmax + 16384], tmax)
+    tau = None
+    for i in range(tmin, tmax):
+        if cmnd[i] < 0.15:
+            while i + 1 < tmax and cmnd[i + 1] < cmnd[i]:
+                i += 1
+            tau = i
+            break
+    if tau is None:
+        tau = tmin + int(np.argmin(cmnd[tmin:tmax]))
+    aper = float(cmnd[tau])
+    if aper > MAX_APERIODICITY:
+        return {"hz": None, "reason": f"it doesn't repeat (aperiodicity {aper:.2f})",
+                "aperiodicity": round(aper, 2)}
+    a, b, c = cmnd[tau - 1], cmnd[tau], cmnd[min(tau + 1, tmax)]
+    den = a - 2 * b + c
+    f0 = rate / (tau + (0.5 * (a - c) / den if den else 0.0))
+    seg = x[:SEGMENT_MAX]
+    mag, binhz = _spectrum(seg, rate, pad=4 if len(seg) > 16384 else 8)
+    if tau < 16:
+        # at a period of a few samples YIN's interpolation is coarse (a 3-sample
+        # cycle reads 2% sharp): take the spectral peak near it instead
+        lo, hi = int(f0 * 0.94 / binhz), min(int(f0 * 1.06 / binhz) + 2, len(mag))
+        i = lo + int(np.argmax(mag[lo:hi]))
+        if 0 < i < len(mag) - 1:
+            pa, pb, pc = (np.log(mag[j] + 1e-12) for j in (i - 1, i, i + 1))
+            den = pa - 2 * pb + pc
+            f0 = (i + (0.5 * (pa - pc) / den if den else 0.0)) * binhz
+        else:
+            f0 = i * binhz
+    harm, total = _harmonics(mag, binhz, f0, rate, len(seg))
+    # a period of two cycles (a short period isn't a whole number of samples, so
+    # YIN's dip there can miss the threshold): then the odd harmonics are empty
+    on = sum(p for _, p, _, _ in harm)
+    if f0 * 2 < fmax and on > 0 and sum(p for k, p, _, _ in harm if k % 2) < 0.02 * on:
+        f0 *= 2
+        harm, total = _harmonics(mag, binhz, f0, rate, len(seg))
+        on = sum(p for _, p, _, _ in harm)
+    harmonicity = on / total if total > 0 else 0.0
+    res = {"aperiodicity": round(aper, 3), "harmonicity": round(harmonicity, 2),
+           "confidence": round((1 - aper) * harmonicity, 2)}
+    if harmonicity < MIN_HARMONICITY:
+        return {"hz": None, "reason": f"only {harmonicity:.0%} of its energy is on the harmonics "
+                f"of {f0:.1f} Hz (noise, or several notes)", **res}
+    # several notes repeat together at a common period below them all: its
+    # lowest harmonics are empty and the notes sit higher up the series (4:5:6
+    # for a major triad). One note keeps energy on harmonic 1 or 2.
+    loudest = max(p for _, p, _, _ in harm)
+    strong = [k for k, p, _, _ in harm if p >= 0.01 * loudest]
+    if min(strong) >= 3:
+        return {"hz": None, "reason": f"its partials sit on harmonics {', '.join(map(str, strong[:4]))} "
+                f"of {f0:.1f} Hz with nothing below (several notes, a chord)", **res}
+    # refine from the partials' peaks, low harmonics weighted most: they're the
+    # clearest, and real instruments' upper partials run sharp
+    peaks = [(k, hz, m) for k, _, hz, m in harm if hz is not None and k <= 16]
+    if peaks:
+        top = max(m for _, _, m in peaks)
+        peaks = [(k, hz, m) for k, hz, m in peaks if m >= 0.01 * top]
+        refined = float(np.average([hz / k for k, hz, _ in peaks], weights=[m / k for k, _, m in peaks]))
+        if abs(1200 * np.log2(refined / f0)) < 30:
+            f0 = refined
+    return {"hz": f0, "period": rate / f0, **res}
+
+
+def note_of(hz, a4=440.0):
+    """(nearest Furnace note number, cents from it) for a frequency."""
+    n = 108 + 12 * np.log2(hz / note_hz(108, a4))
+    return int(round(n)), float(100 * (n - round(n)))
+
+
+def sample_tuning(center_rate, period, nominal, a4=440.0, c4_plays=None):
+    """How a sample with a period of `period` samples plays, and the center rate
+    that tunes it.
+
+    At its center rate a sample plays a written C-4 at center_rate * 8372.02 /
+    nominal samples per second (nominal: 8372, or 8363 in old-convention songs),
+    so a 32-sample cycle at center_rate == nominal plays C-4 exactly. Both that
+    rate and the song's C-4 scale with the song's tuning, so it cancels.
+
+    c4_plays: the note a written C-4 should sound (a Furnace note number). None
+    picks the C nearest the sample's current pitch, which moves the rate by half
+    an octave at most (the usual way: a written E then plays an E)."""
+    c4 = note_hz(108, a4)
+    plays = center_rate * 32 * c4 / (nominal * period)
+    semis = 12 * np.log2(plays / c4)  # above C-4, for a written C-4
+    target = 12 * round(semis / 12) if c4_plays is None else c4_plays - 108
+    exact = center_rate * 2 ** ((target - semis) / 12)
+    new = int(round(exact))
+    after = 1200 * np.log2(new / exact) if new > 0 else float("-inf")
+    note, cents = note_of(plays, a4)
+    return {"plays_hz": plays, "plays_note": note, "plays_cents": cents,
+            "new_rate": new, "target_semitones": int(target), "residual_cents": after}

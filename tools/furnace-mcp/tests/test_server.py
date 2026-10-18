@@ -49,7 +49,7 @@ async def test_tools_listed():
         names = {t.name for t in (await c.list_tools()).tools}
     assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
                      "read_instrument", "write_instrument", "render", "preview_instrument",
-                     "export"}
+                     "export", "export_video"}
 
 
 async def test_inspect(demo):
@@ -306,3 +306,25 @@ def test_save_stages_next_to_the_song(demo, monkeypatch):
     monkeypatch.setattr(fsong.os, "replace", lambda a, b: (seen.append(Path(a)), real(a, b)))
     fsong.save(fsong.load(demo), demo)
     assert seen and seen[0].parent == Path(demo).parent and not seen[0].exists()
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not on PATH")
+async def test_export_video(demo, tmp_path):
+    out = tmp_path / "scopes.mp4"
+    async with Client(mcp) as c:
+        msg = text(await c.call_tool("export_video", {
+            "path": demo, "output": str(out), "order_start": 2, "order_end": 2,
+            "size": "320x180", "fps": 10, "color": "channel"}))
+    assert "SN76489 #1" in msg and "YM2612 #1" in msg, msg
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height",
+                            "-of", "csv=p=0", str(out)], capture_output=True, text=True, check=True)
+    assert probe.stdout.split() == ["h264,320,180", "aac"]
+
+
+async def test_export_video_rejects_bad_input(demo, tmp_path):
+    async with Client(mcp) as c:
+        bad_ext = await c.call_tool("export_video", {"path": demo, "output": str(tmp_path / "a.gif")})
+        bad_size = await c.call_tool("export_video", {"path": demo, "output": str(tmp_path / "a.mp4"),
+                                                      "size": "321x180"})
+    assert bad_ext.is_error and ".mp4" in bad_ext.content[0].text
+    assert bad_size.is_error and "even" in bad_size.content[0].text

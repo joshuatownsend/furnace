@@ -76,9 +76,9 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
 <div class="wrap">
 <header style="display:flex;flex-direction:column;gap:10px">
   <h1>Furnace fork: feature portfolio</h1>
-  <p>Ideas for the personal fork of the Furnace chiptune tracker, grounded in its code, upstream user requests, and the maintainer's own goal of composing and tuning instruments through Claude.</p>
-  <div class="meta"><span>run <b>2026-10-15</b></span><span>mode <b>quick</b></span><span>sha <b>5b9c00314</b></span><span>output <b>ideas/</b></span></div>
-  <div class="funnel"><span>23 candidates</span><i>→</i><span>6 survivors</span><i>→</i><span>6 selected</span><i>·</i><span>9 parked</span><span>8 killed</span></div>
+  <p>Ideas for the personal fork of the Furnace chiptune tracker, grounded in its code, upstream user requests, community demand, and the maintainer's own goal of composing and tuning instruments through Claude. Ideas 01-06 came from the first run. Ideas 07-13 come from a second run that researched what other Furnace users ask for. Ideas 14-17 come from comparing Furnace with other trackers. Ideas 18-21 connect Michael's Lumatone keyboard.</p>
+  <div class="meta"><span>runs <b>2026-10-15</b>, <b>2026-10-17</b></span><span>status <b>2026-10-18</b>: 8 merged, 1 partly, 2 briefs</span><span>mode <b>quick</b></span><span>sha <b>5b9c00314</b></span><span>output <b>ideas/</b></span></div>
+  <div class="funnel"><span>23 candidates</span><i>→</i><span>6 survivors</span><i>→</i><span>6 selected</span><i>+</i><span>15 added in run 2</span><i>·</i><span>11 parked</span><span>12 killed</span></div>
 </header>
 
 <section>
@@ -89,10 +89,17 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
       <div><div class="st">delivered</div>Upstream GitHub: 344 Suggestions discussions plus Issues</div>
       <div><div class="st">delivered · zero</div>Session history: no earlier sessions exist for this repo</div>
       <div><div class="st">partial</div>Maintainer interview: 1 of 3 questions answered</div>
+      <div><div class="st">delivered · run 2</div>Upstream demand pass: about 50 GitHub threads, ranked by upvotes and comments</div>
+      <div><div class="st">partial · run 2</div>Reddit: one r/FurnaceTracker thread, relayed by Josh. Reddit and other social sites could not be read.</div>
+      <div><div class="st">delivered · run 2</div>Fork checks against named files for every ranked request</div>
+      <div><div class="st">delivered · run 2</div>Tracker comparison: feature pages for FamiStudio, DefleMask, Dn-FamiTracker, BambooTracker, Renoise, OpenMPT, Arkos and LSDj</div>
+      <div><div class="st">delivered · run 2</div>Lumatone: its manual, specs and help pages, plus the fork's MIDI and pitch code</div>
     </div>
     <ul>
-      <li>The "composing through Claude" persona rests on one interview sentence and is low confidence. "Chip creation/tuning" was read as instrument/patch design and sample tuning, not new chip emulators.</li>
-      <li>Upstream demand is shallow: the top suggestion has 13 upvotes. No web search was run (quick mode).</li>
+      <li>Ideas 01-06 rest on the maintainer's goal of composing through Claude. That persona rests on one interview sentence and is low confidence.</li>
+      <li>From run 2 on, the portfolio builds for other Furnace users, not only for Josh. Items that run 1 parked or killed because Josh does not use them are revisited on community demand. Items 11-13 below were parked before and are now active.</li>
+      <li>Scores for 07-21 are my estimates from demand and fit. /ideate has not scored them.</li>
+      <li>Upstream demand is shallow: the top suggestion has 13 upvotes, so rank by theme, not by one thread. The upstream FAQ and some threads are older than the 0.7-era code in this fork, so each claim was re-checked in the code.</li>
       <li>Every change in a personal fork adds merge work on upstream sync. New CLI flags and new files cost less than edits to busy GUI files.</li>
       <li>Git submodules are not checked out locally; building the fork needs <code>git submodule update --init</code> first.</li>
     </ul>
@@ -104,19 +111,48 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
   <div class="scroll"><table>
     <thead><tr><th>#</th><th>Idea</th><th>Verdict</th><th>Score</th><th>Lenses</th><th>Persona</th><th>Evidence</th><th>Effort</th><th>Build</th><th>State</th></tr></thead>
     <tbody>
-      <tr><td class="n">01</td><td>Load songs from JSON</td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Josh, Exporter</td><td><code>json.cpp:32</code> saveJSON exists, no loader</td><td>M</td><td>natural-fit</td><td><span class="pill adv" data-state="2">Merged</span></td></tr>
-      <tr><td class="n">02</td><td>CLI parity with GUI export, richer <code>-info</code></td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Exporter, Josh</td><td><code>main.cpp:1071</code> hard-coded VGM options</td><td>M</td><td>natural-fit</td><td><span class="pill adv" data-state="2">Merged</span></td></tr>
-      <tr><td class="n">03</td><td>Compose and tune with Claude via an MCP server</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh</td><td>Interview answer; CLI renders audio</td><td>M after 01+02</td><td>new-ground</td><td><span class="pill state" data-state="3">Brief written</span></td></tr>
-      <tr><td class="n">04</td><td>Headless "listen" report for rendered audio</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh</td><td><code>tuner.cpp:37-59</code> FFT on live output only</td><td>M</td><td>natural-fit</td><td><span class="pill state" data-state="4">Brief written</span></td></tr>
-      <tr><td class="n">05</td><td>Detect sample pitch automatically</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>inside-out</td><td>Josh?, Importer</td><td><code>tuning-samples.md:10-12</code> manual math</td><td>S–M</td><td>natural-fit</td><td><span class="pill state" data-state="5">Brief written</span></td></tr>
-      <tr><td class="n">06</td><td>Write new chip emulators with Claude (repeatable recipe + one pilot chip)</td><td><span class="pill val">Validate</span></td><td class="mono">8/10</td><td>both</td><td>Josh</td><td>A basic chip add is 16 files / 916 lines; Dummy System template</td><td>M–L</td><td>natural-fit</td><td><span class="pill state" data-state="6">Brief written</span></td></tr>
+      <tr><td class="n">01</td><td>Load songs from JSON</td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Josh, Exporter</td><td><code>json.cpp:32</code> saveJSON exists, no loader</td><td>M</td><td>natural-fit</td><td><span class="pill adv" data-state="2">Merged #2</span></td></tr>
+      <tr><td class="n">02</td><td>CLI parity with GUI export, richer <code>-info</code></td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Exporter, Josh</td><td><code>main.cpp:1071</code> hard-coded VGM options</td><td>M</td><td>natural-fit</td><td><span class="pill adv" data-state="2">Merged #1</span></td></tr>
+      <tr><td class="n">03</td><td>Compose and tune with Claude via an MCP server</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh</td><td>Interview answer; CLI renders audio</td><td>M after 01+02</td><td>new-ground</td><td><span class="pill adv" data-state="3">Merged #3, #8, #9</span></td></tr>
+      <tr><td class="n">04</td><td>Headless "listen" report for rendered audio</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh</td><td><code>tuner.cpp:37-59</code> FFT on live output only</td><td>M</td><td>natural-fit</td><td><span class="pill adv" data-state="4">Merged #4, #5</span></td></tr>
+      <tr><td class="n">05</td><td>Detect sample pitch automatically</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>inside-out</td><td>Josh?, Importer</td><td><code>tuning-samples.md:10-12</code> manual math</td><td>S–M</td><td>natural-fit</td><td><span class="pill adv" data-state="5">Merged #12</span></td></tr>
+      <tr><td class="n">06</td><td>Write new chip emulators with Claude (repeatable recipe + one pilot chip)</td><td><span class="pill val">Validate</span></td><td class="mono">8/10</td><td>both</td><td>Josh</td><td>A basic chip add is 16 files / 916 lines; Dummy System template</td><td>M–L</td><td>natural-fit</td><td><span class="pill adv" data-state="6">Merged #6, #7</span></td></tr>
+      <tr><td class="n">07</td><td>Color themes: presets, a visible entry point, contrast checks, Perfect Palette link</td><td><span class="pill adv">Advance</span></td><td class="mono">7/10</td><td>both</td><td>Theme tweakers; Josh (his own app)</td><td><code>guiConst.cpp</code> 361 color keys; scheme import/export exists</td><td>S–M</td><td>natural-fit</td><td><span class="pill adv" data-state="7">Merged #11</span></td></tr>
+      <tr><td class="n">08</td><td>Export to NSF, HES, SNDH, KSS, GBS and SPC</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>outside-in</td><td>Musicians shipping to players and hardware</td><td>#857: 8 upvotes, 12 comments; S98, SAP-R and ZSM already export</td><td>M per format</td><td>natural-fit</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">09</td><td>Editor quality-of-life bundle</td><td><span class="pill val">Validate</span></td><td class="mono">5/10</td><td>outside-in</td><td>Daily composers</td><td>6 threads, 18 upvotes (#2911, #886, #1146, #987)</td><td>S each</td><td>natural-fit</td><td><span class="pill adv" data-state="9">Partly merged #13</span></td></tr>
+      <tr><td class="n">10</td><td>MIDI input fixes and MIDI clock sync</td><td><span class="pill val">Validate</span></td><td class="mono">5/10</td><td>outside-in</td><td>MIDI keyboard users</td><td>#2480: 7 upvotes; #918: 5 upvotes; clock out exists, clock in does not</td><td>S–M</td><td>natural-fit</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">11</td><td>Sample and instrument import (.fti, .bti, more sample formats)</td><td><span class="pill val">Validate</span></td><td class="mono">5/10</td><td>both</td><td>Sample and instrument collectors</td><td><code>fileOpsIns.cpp:2066</code>; #859, #1921, #2174</td><td>M</td><td>natural-fit</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">12</td><td>DAW plugin</td><td><span class="pill val">Validate</span></td><td class="mono">5/10</td><td>outside-in</td><td>DAW users</td><td>#1804: 13 upvotes, the top request; no plugin target in <code>CMakeLists.txt</code></td><td>L</td><td>new-ground</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">13</td><td>Piano roll or DAW-style pattern view</td><td><span class="pill val">Validate</span></td><td class="mono">4/10</td><td>outside-in</td><td>Composers coming from DAWs</td><td>#2311: 33 comments; #1024; upstream FAQ says no plans</td><td>L</td><td>new-ground</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">14</td><td>Oscilloscope video export for sharing songs</td><td><span class="pill adv">Advance</span></td><td class="mono">7/10</td><td>outside-in</td><td>Michael and anyone who posts chip music to YouTube</td><td>FamiStudio has it; no video code found in the fork's GUI sources</td><td>M</td><td>new-ground</td><td><span class="pill adv" data-state="14">Merged #10</span></td></tr>
+      <tr><td class="n">15</td><td>Assembler and driver source export</td><td><span class="pill val">Validate</span></td><td class="mono">5/10</td><td>outside-in</td><td>Homebrew developers</td><td>FamiStudio engine (CA65, NESASM, ASM6); Arkos source export; fork exports only ZSM, SAP-R, TIunA and similar</td><td>M–L</td><td>new-ground</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">16</td><td>Sample editor: DC offset removal, SF2 and SFZ import</td><td><span class="pill val">Validate</span></td><td class="mono">4/10</td><td>outside-in</td><td>Sample users</td><td>OpenMPT has both; <code>sampleEdit.cpp</code> has normalize, resample, filter, fades, no DC offset</td><td>S–M</td><td>natural-fit</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">17</td><td>MIDI clock in and live pattern queueing</td><td><span class="pill val">Validate</span></td><td class="mono">4/10</td><td>outside-in</td><td>Live performers with external gear</td><td>LSDj and OpenMPT sync; fork sends clock out (<code>playback.cpp:2740</code>) but never receives it</td><td>M</td><td>natural-fit</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">18</td><td>Lumatone plug-in test with today's MIDI settings</td><td><span class="pill adv">Advance</span></td><td class="mono">8/10</td><td>both</td><td>Michael</td><td>"Direct channel" exists (<code>gui.h:1286</code>); chords come from the Mono/Poly/Chord button</td><td>S</td><td>natural-fit</td><td><span class="pill state" data-state="18">Brief written</span></td></tr>
+      <tr><td class="n">19</td><td>Lumatone layout import and microtonal input</td><td><span class="pill adv">Advance</span></td><td class="mono">7/10</td><td>both</td><td>Michael; microtonal players</td><td>Lumatone sends notes only; fork pitch is 12-tone (<code>engine.cpp:1840-1920</code>); <code>E5xx</code> detune is 0.78 cents a step</td><td>M</td><td>new-ground</td><td><span class="pill state" data-state="19">Brief written</span></td></tr>
+      <tr><td class="n">20</td><td>Lumatone key lights that follow the song</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>both</td><td>Michael (and his videos)</td><td>MIDI out sends sysex (<code>rtmidi.cpp:180</code>); Lumatone Editor source holds the protocol</td><td>M</td><td>new-ground</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
+      <tr><td class="n">21</td><td>Microtonal tuning tables (EDO, Scala, maybe MTS-ESP)</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>both</td><td>Michael; #881 requesters</td><td>One tuning value per song (<code>song.h:312</code>); revived from the parked list</td><td>L</td><td>new-ground</td><td><span class="pill state" data-state="0">No brief yet</span></td></tr>
     </tbody>
   </table></div>
   <div class="chain">01 JSON import ─┐
 02 CLI parity ──┼──▶ 03 MCP server ◀── 04 listen report (feedback loop)
                │
 05 pitch detect (independent; also a tool 03 could call)
-06 chip emulators (independent; new chips become new material for 03)</div>
+06 chip emulators (independent; new chips become new material for 03)
+
+02 CLI parity ──▶ 08 more export formats (reuses the CLI export path)
+07 color themes (independent; Perfect Palette becomes an import/export partner)
+09 editor QoL, 10 MIDI input (independent small patches)
+11 sample/instrument import (pairs with 05 pitch detect)
+12 DAW plugin, 13 piano roll (large; each needs a design spike first)
+
+02 CLI parity ──▶ 14 scope video (CLI flag first; GUI button after)
+07 color themes ──▶ 14 (scope colors come from the theme)
+08 export formats ──▶ 15 source export (same per-chip player problem)
+11 import ──▶ 16 sample tools; 10 MIDI input ──▶ 17 clock in
+
+18 plug-in test ──▶ 19 layout import + microtones ──▶ 21 tuning tables (full path)
+18 ──▶ 20 key lights (colors from 07; shows up in 14's videos)</div>
 </section>
 
 <section>
@@ -146,6 +182,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
     <details><summary><b>05 · Detect sample pitch automatically</b><span class="pill val">Validate</span><span class="mono">6/10</span></summary><div class="card-body"><dl>
       <dt>evidence</dt><dd><code>doc/9-guides/tuning-samples.md:10-12</code> tells users to compute semitone offsets by hand or use a web calculator.</dd>
       <dt>open gap</dt><dd>Unknown whether Josh works with recorded samples.</dd>
+      <dt>result</dt><dd>Merged as #12 (2026-10-18) as two Claude tools, <code>detect_sample_pitch</code> and <code>tune_sample</code>, with no GUI change. Within 2 cents on test tones; a real piano sample went from +14 to −1.6 cents once tuned. Open: fixed-rate chips (YM2610 ADPCM-A, MSM6295) ignore the rate, note-map pitch shifts aren't flagged, and BRR and ADPCM samples can't be read.</dd>
     </dl></div></details>
     <details><summary><b>06 · Write new chip emulators with Claude</b><span class="pill val">Validate</span><span class="mono">8/10</span></summary><div class="card-body"><dl>
       <dt>persona</dt><dd>Josh, added mid-run: "I'd also like to be able to write new chip emulators using Claude".</dd>
@@ -153,24 +190,102 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
       <dt>why Claude fits</dt><dd>The work follows a fixed pattern, and most Furnace chips are ports of existing open-source cores. A written recipe plus a sound-comparison test makes it repeatable.</dd>
       <dt>open gap</dt><dd>Which pilot chip; how to check accuracy without real hardware; and chip IDs. Each chip's one-byte ID is saved in .fur files. Upstream uses <code>0x80</code>–<code>0xe7</code> plus <code>0xf0</code>, <code>0xf1</code>, <code>0xf5</code>, <code>0xfc</code> and <code>0xfd</code>, so fork chips need a reserved range (maybe <code>0xf6</code>–<code>0xfb</code>), and their songs won't open in upstream Furnace.</dd>
     </dl></div></details>
+    <details><summary><b>07 · Color themes and Perfect Palette</b><span class="pill adv">Advance</span><span class="mono">7/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>People who want a light mode or their own palette. A r/FurnaceTracker thread asked for exactly this, and Josh relayed it.</dd>
+      <dt>evidence</dt><dd>The settings already have a Color tab (<code>allSettings.cpp</code> ~2453-2500) with scheme import and export (<code>settings.cpp</code> ~286-320). There are 361 color keys in <code>guiConst.cpp</code>, stored as plain key=value text. Dark/Light and the two accent colors show by default; the full color list is behind Guru mode. A reply in the thread had to point to Ctrl+, and the Color tab, so the feature exists but is hard to find.</dd>
+      <dt>shape</dt><dd>Ship a few presets including a real light theme. Add a visible entry point. Check text and background pairs against 4.5:1 contrast. Make scheme files round-trip with Perfect Palette, which already checks WCAG AA/AAA and exports 26+ formats. A menu link to perfectpalette.io is a product call for Josh.</dd>
+      <dt>open gap</dt><dd>Basic mode already derives buttons, tabs and headers from the two accents (<code>settings.cpp:823-850</code>). Text and window colors still come from dark defaults, so the Light option alone may not be readable. That is the first thing to check, then a palette has to map onto the 361 keys. Only one thread asks for this. Brief: <code>ideas/007-color-themes.md</code>.</dd>
+    </dl></div></details>
+    <details><summary><b>08 · More export formats</b><span class="pill val">Validate</span><span class="mono">6/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Musicians who want to ship songs to standalone players, demos and hardware.</dd>
+      <dt>evidence</dt><dd>#857 asks for NSF, HES, SNDH, KSS, GBS and SPC (8 upvotes, 12 comments). S98, SAP-R and ZSM export already exists in <code>src/engine/export</code>. Idea 02 puts these exporters on the CLI, so each new format is available there too.</dd>
+      <dt>open gap</dt><dd>Some of these formats embed a player routine that must be written per chip, which is why upstream expects ROM export to cover this in 0.7. Pick one pilot format first.</dd>
+    </dl></div></details>
+    <details><summary><b>09 · Editor quality-of-life bundle</b><span class="pill val">Validate</span><span class="mono">5/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>Six small threads, 18 upvotes in total: no re-center on click (#2911), two-note arpeggio (#886), stereo scope (#1146), harmonics view (#987), Ctrl+scroll, and detachable windows.</dd>
+      <dt>shape</dt><dd>Independent small patches. GUI files are busy upstream, so each one should be its own commit to keep sync cheap.</dd>
+      <dt>result</dt><dd>Merged as #13 (2026-10-18): a Harmonics tab in the wave editor (#987), with a Copy to Shapes button. Two requests already exist as settings: "Don't scroll when moving cursor" covers #2911, and turning off Oscilloscope &gt; Mono gives the stereo mix scope (#1146). Skipped: a stereo scope per channel (every chip driver), detachable windows (large), Ctrl+scroll (no clear request). Two-note arp (#886) changes how songs play, so it waits for Josh.</dd>
+    </dl></div></details>
+    <details><summary><b>10 · MIDI input fixes and clock sync</b><span class="pill val">Validate</span><span class="mono">5/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>Input fixes (#2480, 7 upvotes) and MIDI clock sync (#918, 5 upvotes). The fork already sends MIDI clock out (<code>playback.cpp:2740</code>) but nothing receives it, so #918 is about clock in. MIDI file import already exists (<code>fileOps/midi.cpp:423</code>), so this is about live input.</dd>
+      <dt>open gap</dt><dd>Needs a MIDI controller to test. Without one, only the parsing can be verified.</dd>
+    </dl></div></details>
+    <details><summary><b>11 · Sample and instrument import</b><span class="pill val">Validate</span><span class="mono">5/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Revived from the parked list. Josh does not use it, but others ask for it.</dd>
+      <dt>evidence</dt><dd>.fti and .bti instrument loading is a real gap (<code>fileOpsIns.cpp:2066</code>, #859). Sample and instrument import is also requested in #1921 and #2174. The sample engine already has a 4-bit depth.</dd>
+      <dt>shape</dt><dd>Add loaders one format at a time, with per-file warnings when something cannot be imported. The warnings were a separate parked item.</dd>
+    </dl></div></details>
+    <details><summary><b>12 · DAW plugin</b><span class="pill val">Validate</span><span class="mono">5/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Revived from the parked list. The top upstream request, but not part of Josh's own workflow.</dd>
+      <dt>evidence</dt><dd>#1804 has 13 upvotes. <code>CMakeLists.txt</code> has no plugin target, so this starts from nothing.</dd>
+      <dt>open gap</dt><dd>Needs a design spike first: plugin format (CLAP or VST3) and how the engine runs without the GUI. Large.</dd>
+    </dl></div></details>
+    <details><summary><b>13 · Piano roll or DAW-style pattern view</b><span class="pill val">Validate</span><span class="mono">4/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Revived from the parked list. People who arrive from DAWs.</dd>
+      <dt>evidence</dt><dd>#2311 has 33 comments and #1024 asks for a DAW-style pattern view. The upstream FAQ says a piano roll is not planned, so this stays in the fork and adds merge work on every sync.</dd>
+      <dt>shape</dt><dd>A cheaper first step is a read-only piano-roll view of one pattern. Idea 03 helps Claude compose without the grid, but not other users.</dd>
+    </dl></div></details>
+    <details><summary><b>14 · Oscilloscope video export</b><span class="pill adv">Advance</span><span class="mono">7/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Michael, Josh's son, who makes Furnace songs and posts them on YouTube (@mysti_is_lost). Anyone who shares chip music as video has the same need. Josh singled this one out.</dd>
+      <dt>evidence</dt><dd>FamiStudio exports oscilloscope videos. I found no video or ffmpeg code in the fork's GUI sources, only SDL display calls. Per-channel audio export already exists (<code>--outmode perchan</code>). The on-screen scope reads a lower-quality buffer that the code says not to use for export, and the software renderer needs a window, so frames cannot be captured headless for free.</dd>
+      <dt>shape</dt><dd>Three options. A: per-channel WAVs plus stock ffmpeg, with no code. B: a small renderer outside the app with a trigger and theme colors from idea 07. C: draw the real scope in the app without a window. Try A first, show Michael, then decide. Brief: <code>ideas/014-oscilloscope-video-export.md</code>.</dd>
+      <dt>open gap</dt><dd>Which look Michael wants: one scope per channel, one combined scope, or scrolling pattern or keys. Ask him for a favorite video to match. I have only skimmed the scope code, so the effort is a guess.</dd>
+    </dl></div></details>
+    <details><summary><b>15 · Assembler and driver source export</b><span class="pill val">Validate</span><span class="mono">5/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Homebrew developers who put Furnace music into their own games.</dd>
+      <dt>evidence</dt><dd>FamiStudio ships a NES sound engine for CA65, NESASM and ASM6 and exports FamiTone2 assembly. Arkos Tracker exports source for any assembler. The fork's export folder has ZSM, SAP-R and TIunA, but no assembler source.</dd>
+      <dt>open gap</dt><dd>Each target needs its own player routine, the same blocker as idea 08. Pick one pilot target and share the work with 08.</dd>
+    </dl></div></details>
+    <details><summary><b>16 · Sample editor: DC offset, SF2 and SFZ</b><span class="pill val">Validate</span><span class="mono">4/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>OpenMPT removes DC offset and loads SF2 and SFZ. The fork's sample editor (<code>sampleEdit.cpp</code>) has normalize, resample, filter, fade in and out, invert, reverse and silence. I found no DC offset removal and no SF2 or SFZ code.</dd>
+      <dt>shape</dt><dd>DC offset is a small button next to normalize. SF2 and SFZ import pairs with idea 11.</dd>
+    </dl></div></details>
+    <details><summary><b>17 · MIDI clock in and live queueing</b><span class="pill val">Validate</span><span class="mono">4/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>LSDj syncs to other gear, and OpenMPT starts and stops from MIDI and queues patterns live. The fork sends MIDI clock out (<code>playback.cpp:2740-2750</code>) but nothing receives it. This is the same request as upstream #918. Idea 10 covers MIDI input fixes, so do the two together.</dd>
+      <dt>open gap</dt><dd>Live pattern queueing in Furnace is unverified. Testing needs a real clock source.</dd>
+    </dl></div></details>
+    <details><summary><b>18 · Lumatone plug-in test</b><span class="pill adv">Advance</span><span class="mono">8/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Michael plays the Lumatone in both 12-tone and microtonal tunings. He wants to record into patterns, play live, and have the keys light up with the song.</dd>
+      <dt>evidence</dt><dd>The fork has MIDI note input, a polyphonic option, and "direct channel", which sends MIDI channel N to tracker channel N (<code>gui.h:1285</code>, <code>settings.cpp:208</code>). MIDI controllers can type effect values (<code>gui.cpp:5218-5260</code>). The Lumatone's 12-ET preset puts its sections on separate MIDI channels.</dd>
+      <dt>shape</dt><dd>No code. Michael plugs in, tries the 12-ET preset with direct channel and poly input on and off, records a pattern, and plays live. Write down what works and what breaks. That list scopes 19-21.</dd>
+      <dt>brief</dt><dd>Written 2026-10-18: <code>ideas/018-lumatone-plug-in-test.md</code>, a 13-step checklist plus a results form. Writing it corrected four claims above. The 12-ET preset uses channels 1-6 inside every section, not one channel per section. There is no polyphonic setting; chords come from the Mono/Poly/Chord button. Direct channel changes which channel plays a note, not which one records it. Furnace sends no sysex today, so the "Light Show" output does nothing.</dd>
+    </dl></div></details>
+    <details><summary><b>19 · Lumatone layout import and microtonal input</b><span class="pill adv">Advance</span><span class="mono">7/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>A Lumatone mapping (<code>.ltn</code>) stores each key's channel, note and color, and the manual says mappings are pitch-agnostic: the receiving instrument decides the pitch. The fork's pitch math is fixed 12-tone (<code>engine.cpp:1840-1920</code>), but every channel has an <code>E5xx</code> pitch effect.</dd>
+      <dt>shape</dt><dd>Load a <code>.ltn</code> file plus a tuning (an EDO size or a Scala file). For each key, work out the nearest 12-tone note and the detune. Recording writes the note plus an <code>E5xx</code> on that row. Live play applies the same detune to the note it previews. Each tracker channel plays one note at a time, so a per-channel detune fits. No engine change, and it works on every chip.</dd>
+      <dt>open gap</dt><dd>The range and step size of <code>E5xx</code> are unchecked, so it may be too coarse for large tunings such as 53-EDO. Chips with coarse frequency registers will be off whatever we do.</dd>
+      <dt>brief</dt><dd>Written 2026-10-18: <code>ideas/019-lumatone-layout-microtonal-input.md</code>. <code>E5xx</code> steps are 0.78 cents and reach ±50 cents, enough for any EDO, but only with linear pitch, and every note row needs one. Corrections to the shape above: live play needs a small engine change, because the engine drops the MIDI channel and a key release stops every channel on that note. A dedicated effect column is needed. A <code>.ltn</code> file holds no tuning, so the import needs a steps-per-channel setting. On SN76489 and NES, close 53-EDO notes merge in high octaves. Spike steps 1-4 need no one; 5-7 need Michael after 18.</dd>
+    </dl></div></details>
+    <details><summary><b>20 · Lumatone key lights that follow the song</b><span class="pill val">Validate</span><span class="mono">6/10</span></summary><div class="card-body"><dl>
+      <dt>evidence</dt><dd>Every Lumatone key has a color LED, set by Lumatone Editor over MIDI. The editor's source is public under BSD-3 (TerpstraSysEx.2014), which fits Furnace's GPL, so the color commands can be learned from it. The fork's MIDI out already sends sysex (<code>rtmidi.cpp:180</code>) and stores a color per channel (<code>gui.cpp:1091</code>).</dd>
+      <dt>shape</dt><dd>During playback, light each key as its note plays, in its channel's color, then restore the layout colors. Channel colors can come from the theme in 07. The lit keyboard can appear in Michael's videos next to the scopes from 14.</dd>
+      <dt>open gap</dt><dd>I have not extracted the color command yet. A busy song may change lights faster than the keyboard accepts sysex, so measure the update rate first.</dd>
+    </dl></div></details>
+    <details><summary><b>21 · Microtonal tuning tables</b><span class="pill val">Validate</span><span class="mono">6/10</span></summary><div class="card-body"><dl>
+      <dt>persona</dt><dd>Revived from the parked list (#881), now with a real user in Michael.</dd>
+      <dt>evidence</dt><dd>A song stores one tuning value, the A reference (<code>song.h:312</code>), limited to 400-500 Hz. Notes become frequencies through a fixed 12-tone formula (<code>engine.cpp:1840-1920</code>).</dd>
+      <dt>shape</dt><dd>A tuning table per song, as an EDO size or a Scala file, used wherever a note becomes a frequency. Optionally follow a live tuning source through ODDSound's MTS-ESP.</dd>
+      <dt>open gap</dt><dd>This changes pitch math for every chip and the .fur format, so these songs would play wrong in upstream Furnace. 19 is the cheap path to try first. Check the MTS-ESP library's license.</dd>
+    </dl></div></details>
   </div>
 </section>
 
 <section>
   <h2><span class="tag">LOG</span>Parked and killed</h2>
-  <details><summary><b>Parked</b><span class="pill park">9</span></summary><div class="card-body" style="padding-left:14px"><div class="scroll"><table class="ledger">
+  <details><summary><b>Parked</b><span class="pill park">10</span></summary><div class="card-body" style="padding-left:14px"><div class="scroll"><table class="ledger">
     <thead><tr><th>Idea</th><th>Reason</th><th>Closest</th></tr></thead><tbody>
     <tr><td>In-process live MCP server</td><td>Needs a new networking library; the 03 spike decides if live control is needed</td><td>03</td></tr>
-    <tr><td>Load .fti / .bti instruments</td><td>Real gap (<code>fileOpsIns.cpp:2066</code>, #859) but no evidence Josh composes for NES/OPNA</td><td>01</td></tr>
-    <tr><td>Per-file import warnings</td><td>Real gap; benefits module importers, not evidenced for Josh</td><td>02</td></tr>
+    <tr><td>Per-file import warnings</td><td>Real gap; pairs with 11 and the importer work below</td><td>11</td></tr>
     <tr><td>Audio effects / DSP layer</td><td>Large; changes the .fur format inside a fork; upstream is building it</td><td>—</td></tr>
     <tr><td>Wavetable reorder leaves stale references</td><td>A bug (<code>engine.cpp:3326</code>), best reported upstream</td><td>—</td></tr>
     <tr><td>Compiled instruments for GB and others</td><td>Niche need for sound-driver authors</td><td>02</td></tr>
     <tr><td>Bundled instrument browser</td><td>Better exposed to Claude as a catalog tool inside 03</td><td>03</td></tr>
-    <tr><td>DAW plugin (#1804)</td><td>Top upstream request, but large and unrelated to Josh's goal</td><td>03</td></tr>
-    <tr><td>Piano roll (#2311)</td><td>Large GUI work; 03 partly covers composing without the grid</td><td>03</td></tr>
-  </tbody></table></div></div></details>
-  <details><summary><b>Killed</b><span class="pill kill">8</span></summary><div class="card-body" style="padding-left:14px"><div class="scroll"><table class="ledger">
+    <tr><td>MIDI-out as a chip (#1126)</td><td>15 comments. Needs a design for timing and channel mapping before any code</td><td>10</td></tr>
+    <tr><td>More importers (Adlib Tracker II #1062; Furnace-to-OpenMPT clipboard #1029)</td><td>Each serves a small group. Revisit after 11 shows how import warnings should work</td><td>11</td></tr>
+    <tr><td>Per-pattern length</td><td>Requested, but touches the pattern model and the .fur format</td><td>—</td></tr>
+    <tr><td>Screen reader support (#2137)</td><td>Real need, but limited by the Dear ImGui toolkit; needs a feasibility check</td><td>—</td></tr>
+    </tbody></table></div></div></details>
+  <details><summary><b>Killed</b><span class="pill kill">12</span></summary><div class="card-body" style="padding-left:14px"><div class="scroll"><table class="ledger">
     <thead><tr><th>Idea</th><th>Reason</th><th>Closest</th></tr></thead><tbody>
     <tr><td>Richer <code>-info</code> on its own</td><td>Merged into 02</td><td>02</td></tr>
     <tr><td>Finish auto-clone</td><td>Upstream's own 0.7 item; a fork version would collide on sync</td><td>—</td></tr>
@@ -180,12 +295,16 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
     <tr><td>Shared export-loop refactor</td><td>Internal only</td><td>02</td></tr>
     <tr><td>Repo hygiene</td><td>Chores (stale merge file, vague error text)</td><td>—</td></tr>
     <tr><td>Document S98 / JSON exports</td><td>Docs belong upstream</td><td>02</td></tr>
+    <tr><td>TI SN76489 mode</td><td>Requested, but the fork already has it (<code>platform/sms.cpp</code> chip types 1-9)</td><td>—</td></tr>
+    <tr><td>Default step size</td><td>Requested, but the fork already saves it with the settings</td><td>—</td></tr>
+    <tr><td>MIDI file import</td><td>Requested, but it exists (<code>fileOps/midi.cpp:423</code>)</td><td>—</td></tr>
+    <tr><td>Per-channel volume meter</td><td>Already available as a setting, per a thread reply</td><td>—</td></tr>
   </tbody></table></div></div></details>
 </section>
 
 <section id="deliverables">
   <h2><span class="tag">OUT</span>Write-ups</h2>
-  <p>Start with 002: it's the only full build plan, and 001, 003 and 004 all build on it. Paste a kickoff prompt into a fresh Claude Code session in this repo to begin that item.</p>
+  <p>Status on 2026-10-18: 001-007 and 014 are merged, and 009 in part. Next up: 018 when Michael has his Lumatone, and steps 1-4 of 019, which need no keyboard. Paste a kickoff prompt into a fresh Claude Code session in this repo to begin an item.</p>
   <div class="deliv">
     <div class="d"><div class="row"><b>002 · CLI export parity</b><span class="pill adv">Handoff plan</span><code>ideas/002-cli-export-parity.md</code></div>
       <p>Eight verified steps that add <code>-furout</code>, <code>-jsonout</code>, <code>-s98out</code> and VGM options, put duration and loop in <code>-info</code>, and fix the <code>-o</code> collision. Each step ends in a byte-identical check against the current build.</p>
@@ -212,10 +331,26 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
       <p>Writes a 16-touchpoint recipe for adding a chip, settles a fork-only chip-ID range with you, and proves both on one pilot chip checked against a reference core.</p>
       <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k6" type="button">Copy</button></div>
       <pre class="kick" id="k6">Read C:\dev\furnace\furnace\ideas\006-chip-emulators-with-claude.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: write a repeatable recipe for adding a sound chip to this Furnace fork, settle a fork-only chip-ID policy with Josh, and prove both on one pilot chip with a reference-comparison check. Do not build beyond the spike; prototype work happens on a branch. Ask Josh to choose the pilot chip and approve the ID range before writing chip code.</pre></div>
+    <div class="d"><div class="row"><b>007 · Color themes</b><span class="pill val">Spike brief</span><code>ideas/007-color-themes.md</code></div>
+      <p>Checks whether the built-in Light option gives a readable theme, sorts the 361 colors into roles, and prototypes a contrast checker. It ends with a yes or no on bundled presets and a draft mapping from a Perfect Palette palette to a Furnace scheme file.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k7" type="button">Copy</button></div>
+      <pre class="kick" id="k7">Read C:\dev\furnace\furnace\ideas\007-color-themes.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: find out whether Furnace's built-in Light option gives a readable theme, work out how a palette becomes a scheme file, and prototype a contrast checker. Do not build beyond the spike; prototype work happens behind a flag or on a branch. Ask Josh before changing anything outside this repo.</pre></div>
+    <div class="d"><div class="row"><b>014 · Oscilloscope video export</b><span class="pill val">Spike brief</span><code>ideas/014-oscilloscope-video-export.md</code></div>
+      <p>Makes a 30-second test video with one scope per channel from per-channel WAV export and stock ffmpeg, then shows Michael. If the look is wrong it prototypes a small renderer with a steady trigger. It ends with a recommendation on where the code should live.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k14" type="button">Copy</button></div>
+      <pre class="kick" id="k14">Read C:\dev\furnace\furnace\ideas\014-oscilloscope-video-export.md in full before doing anything. It is a design-spike brief: run the spike steps, answer the open questions, and report against its decision criteria. Scope: produce a test video with one oscilloscope per channel from a Furnace song using per-channel WAV export and ffmpeg, and find out whether it looks right. Do not build beyond the spike; prototype work happens behind a flag or on a branch. Ask Josh for Michael's example song and a video to match before step 3.</pre></div>
+    <div class="d"><div class="row"><b>018 · Lumatone plug-in test</b><span class="pill val">Test checklist</span><code>ideas/018-lumatone-plug-in-test.md</code></div>
+      <p>Thirteen steps Michael can run with his Lumatone, no Claude session needed: connect it, record, test chords and repeated notes, try both presets, then fill in a results form that scopes 19-21.</p></div>
+    <div class="d"><div class="row"><b>019 · Lumatone layout import and microtonal input</b><span class="pill val">Spike brief</span><code>ideas/019-lumatone-layout-microtonal-input.md</code></div>
+      <p>Parses <code>.ltn</code> layouts and Scala tunings, measures the detune on three chips, and prototypes live detune from a virtual MIDI port. Steps 5-7 need Michael and the keyboard.</p>
+      <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k19" type="button">Copy</button></div>
+      <pre class="kick" id="k19">Read C:\dev\furnace\furnace\ideas\019-lumatone-layout-microtonal-input.md in full before doing anything. It is a design-spike brief: run spike steps 1-4 (they need no keyboard), answer the open questions, and report against its decision criteria. Scope: prove that Lumatone layouts plus a tuning can become Furnace notes with E5xx detune, and prototype live detune. Do not build beyond the spike; prototype work happens on a branch. Stop before steps 5-7, which need Michael and his Lumatone.</pre></div>
+    <div class="d"><div class="row"><b>008, 010–013, 015–017, 020–021 · Other new ideas</b><span class="pill park">No brief yet</span><a href="https://claude.ai/artifact/UgL1wD3hT3H2qC6vyRnWdg">Ranked demand doc</a></div>
+      <p>These ten have no files in <code>ideas/</code> yet. The ranked doc holds the thread links and vote counts behind 08-13. The sources for 15-21 are in their cards. 20 and 21 wait on 18's results. Run /ideate against the doc to write briefs for the ones you pick.</p></div>
   </div>
 </section>
 
-<footer>Generated by /ideate at <span class="mono">5b9c00314</span>. The markdown files in <code>ideas/</code> are the source of truth.</footer>
+<footer>Generated by /ideate at <span class="mono">5b9c00314</span> (run 1). Ideas 07-21 were added on 2026-10-17 from community-demand research, a comparison with other trackers, and Michael's Lumatone. Status last updated 2026-10-18 (PRs #1-#13). The markdown files in <code>ideas/</code> are the source of truth.</footer>
 </div>
 <script>
 document.addEventListener('click',function(e){
@@ -228,3 +363,4 @@ document.addEventListener('click',function(e){
   function sel(el){var r=document.createRange();r.selectNodeContents(el);var s=getSelection();s.removeAllRanges();s.addRange(r);b.textContent='Selected, press Ctrl+C'}
 });
 </script>
+

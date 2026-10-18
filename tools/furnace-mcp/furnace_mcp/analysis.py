@@ -402,6 +402,22 @@ def _holds_cycles(body):
     return len(dips) > 0 and dips[0] + 2 <= n * 2 / 3
 
 
+def full_scale(depth):
+    """The largest level a sample of this bit depth reaches (as sample_pcm scales
+    it): 8-bit audio tops out at 127/128 one way and -1 the other."""
+    return 127 / 128 if depth == 8 else 32767 / 32768
+
+
+def clipped_runs(x, level):
+    """Samples of x that sit at full scale (|x| >= level) next to another one that
+    does: flat tops, the mark of clipping. A lone peak at full scale isn't counted."""
+    at = np.abs(np.asarray(x)) >= level - 1e-6
+    if len(at) < 2:
+        return 0
+    pair = at[1:] & at[:-1]
+    return int((np.r_[pair, False] | np.r_[False, pair]).sum())
+
+
 def sample_segment(x, loop=None):
     """The steady part of a sample to measure: (audio, description).
 

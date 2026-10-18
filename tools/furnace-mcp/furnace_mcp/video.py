@@ -274,7 +274,11 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
         cmd = [exe, "-hide_banner", "-loglevel", "error", "-y",
                "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}", "-r", str(fps), "-i", "-"]
         if stills:
-            frames = [min(nframes - 1, int((k + 0.5) * nframes / stills)) for k in range(stills)]
+            # one frame in each of `stills` equal parts, at a different place in
+            # each (golden-ratio steps): evenly spaced frames can be a whole bar
+            # apart and show the same beat every time
+            frames = [min(nframes - 1, int((k + (0.5 + k * 0.618034) % 1) * nframes / stills))
+                      for k in range(stills)]
             vf += [f"scale={width // 4}:-2",
                    f"tile=4x{-(-stills // 4)}:padding=6:margin=6:color=0x707070"]
             cmd += ["-vf", ",".join(vf), "-frames:v", "1", str(out)]

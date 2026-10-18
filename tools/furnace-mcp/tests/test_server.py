@@ -498,3 +498,10 @@ async def test_export_video_preview(demo, tmp_path):
     assert [type(x).__name__ for x in res.content] == ["TextContent", "ImageContent"]
     assert out.with_suffix(".png").is_file() and not out.exists()
     assert "8 frames" in res.content[0].text
+
+
+async def test_export_to_a_missing_folder_says_so(demo, tmp_path):
+    async with Client(mcp) as c:
+        for tool, out in (("export", "song.vgm"), ("export_video", "v.mp4")):
+            res = await c.call_tool(tool, {"path": demo, "output": str(tmp_path / "nope" / out)})
+            assert res.is_error and "doesn't exist" in res.content[0].text, res.content

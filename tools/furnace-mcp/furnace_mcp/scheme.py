@@ -81,35 +81,48 @@ AA = 4.5  # WCAG AA for normal text
 
 _WINDOW = ("GUI_COLOR_FRAME_BACKGROUND", "GUI_COLOR_BACKGROUND")
 _PATTERN = ("GUI_COLOR_PATTERN_BG",) + _WINDOW
-# pattern text sits on the pattern, on highlighted rows and the play head (row
-# index too), and on the selection and the cursor, hovered or not
-_ROW_OVERLAYS = ["GUI_COLOR_PATTERN_HI_1", "GUI_COLOR_PATTERN_HI_2", "GUI_COLOR_PATTERN_PLAY_HEAD"]
-_CELL_OVERLAYS = ["GUI_COLOR_PATTERN_SELECTION", "GUI_COLOR_PATTERN_SELECTION_HOVER",
-                  "GUI_COLOR_PATTERN_CURSOR", "GUI_COLOR_PATTERN_CURSOR_HOVER"]
+# pattern rows: plain, highlighted, the play head, or the row being edited
+_ROW_OVERLAYS = ["GUI_COLOR_PATTERN_HI_1", "GUI_COLOR_PATTERN_HI_2", "GUI_COLOR_PATTERN_PLAY_HEAD",
+                 "GUI_COLOR_EDITING", "GUI_COLOR_EDITING_CLONE"]
+# cells on any row: plain, selected, under the cursor, or both, hovered or not (top first)
+_CELL_STACKS = [("GUI_COLOR_PATTERN_SELECTION",), ("GUI_COLOR_PATTERN_SELECTION_HOVER",),
+                ("GUI_COLOR_PATTERN_CURSOR",), ("GUI_COLOR_PATTERN_CURSOR_HOVER",),
+                ("GUI_COLOR_PATTERN_CURSOR", "GUI_COLOR_PATTERN_SELECTION"),
+                ("GUI_COLOR_PATTERN_CURSOR_HOVER", "GUI_COLOR_PATTERN_SELECTION")]
 _ROW_BGS = [_PATTERN] + [(k,) + _PATTERN for k in _ROW_OVERLAYS]
-_CELL_BGS = _ROW_BGS + [(k,) + _PATTERN for k in _CELL_OVERLAYS]
+_CELL_BGS = _ROW_BGS + [cell + row for row in _ROW_BGS for cell in _CELL_STACKS]
+# order numbers: plain, the playing order, the song loop, or both
+_ORDER_BGS = [_WINDOW, ("GUI_COLOR_ORDER_ACTIVE",) + _WINDOW, ("GUI_COLOR_SONG_LOOP",) + _WINDOW,
+              ("GUI_COLOR_SONG_LOOP", "GUI_COLOR_ORDER_ACTIVE") + _WINDOW]
 # row numbers sit on rows only; the inactive (dimmed placeholder) colors are left out on purpose
 _ROW_TEXT = ["GUI_COLOR_PATTERN_ROW_INDEX", "GUI_COLOR_PATTERN_ROW_INDEX_HI1", "GUI_COLOR_PATTERN_ROW_INDEX_HI2"]
 _PATTERN_TEXT = ["GUI_COLOR_PATTERN_ACTIVE", "GUI_COLOR_PATTERN_ACTIVE_HI1", "GUI_COLOR_PATTERN_ACTIVE_HI2",
                  "GUI_COLOR_PATTERN_INS", "GUI_COLOR_PATTERN_INS_WARN", "GUI_COLOR_PATTERN_INS_ERROR",
-                 "GUI_COLOR_PATTERN_VOLUME_MAX", "GUI_COLOR_PATTERN_VOLUME_HALF"] + [f"GUI_COLOR_PATTERN_EFFECT_{k}" for k in
-                                                     ("INVALID", "PITCH", "VOLUME", "PANNING", "SONG", "TIME",
-                                                      "SPEED", "SYS_PRIMARY", "SYS_SECONDARY", "MISC")]
+                 "GUI_COLOR_PATTERN_VOLUME_MAX", "GUI_COLOR_PATTERN_VOLUME_HALF"] + [
+    f"GUI_COLOR_PATTERN_EFFECT_{k}" for k in ("INVALID", "PITCH", "VOLUME", "PANNING", "SONG", "TIME",
+                                              "SPEED", "SYS_PRIMARY", "SYS_SECONDARY", "MISC")]
+
+
+def _widget(*keys):
+    return [(k,) + _WINDOW for k in keys]
+
 
 # (text color, [its backgrounds, each as layers from the top down]). The C++
 # check in settings.cpp (FurnaceGUI::drawContrastCheck) checks the same, with the
 # widget backgrounds taken from the applied ImGui style so basic mode counts.
 CONTRAST_PAIRS = [
     ("GUI_COLOR_TEXT", [_WINDOW]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_FRAME_BACKGROUND_POPUP",) + _WINDOW]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_MENU_BAR",) + _WINDOW]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_BUTTON",) + _WINDOW]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_WIDGET_BACKGROUND",) + _WINDOW]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_IMGUI_HEADER",) + _WINDOW]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_TAB_ACTIVE",) + _WINDOW]),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_FRAME_BACKGROUND_POPUP")),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_MENU_BAR")),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_BUTTON", "GUI_COLOR_BUTTON_HOVER", "GUI_COLOR_BUTTON_ACTIVE")),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_WIDGET_BACKGROUND", "GUI_COLOR_WIDGET_BACKGROUND_HOVER",
+                               "GUI_COLOR_WIDGET_BACKGROUND_ACTIVE")),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_IMGUI_HEADER", "GUI_COLOR_IMGUI_HEADER_HOVER",
+                               "GUI_COLOR_IMGUI_HEADER_ACTIVE")),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_TAB", "GUI_COLOR_TAB_HOVER", "GUI_COLOR_TAB_ACTIVE")),
     ("GUI_COLOR_TEXT", [("GUI_COLOR_TITLE_BACKGROUND_ACTIVE", "GUI_COLOR_BACKGROUND")]),
-    ("GUI_COLOR_TEXT", [("GUI_COLOR_TABLE_HEADER",) + _WINDOW]),
-    ("GUI_COLOR_ORDER_ROW_INDEX", [_WINDOW]),
+    ("GUI_COLOR_TEXT", _widget("GUI_COLOR_TABLE_HEADER")),
+    ("GUI_COLOR_ORDER_ROW_INDEX", _ORDER_BGS),
 ] + [(k, _ROW_BGS) for k in _ROW_TEXT] + [(k, _CELL_BGS) for k in _PATTERN_TEXT]
 
 
@@ -139,20 +152,31 @@ def _hsv_scale(rgba, s, v):
 
 def applied(colors, settings=None):
     """The colors as Furnace draws them. In basic mode (basicColors, on unless set
-    to 0) buttons, inputs, headers, tabs and the title bar come from the two accents,
-    as FurnaceGUI::applyUISettings derives them; guiColorsBase picks dark or light."""
+    to 0) buttons, inputs, headers, tabs and the title bar, with their hovered and
+    active states, come from the two accents, as FurnaceGUI::applyUISettings
+    derives them; guiColorsBase picks dark or light."""
     settings = settings or {}
     if str(settings.get("basicColors", "1")).strip().lower() in ("0", "false"):
         return colors
     p, s = colors["GUI_COLOR_ACCENT_PRIMARY"], colors["GUI_COLOR_ACCENT_SECONDARY"]
     if str(settings.get("guiColorsBase", "0")).strip() == "1":
-        primary, secondary, tab = p, s, _hsv_scale(s, 0.9, 0.7)
+        # pressed stays light enough for dark text (the fork's change; upstream halves the value)
+        primary, p_hover, p_active = p, _hsv_scale(p, 0.9, 0.9), _hsv_scale(p, 0.5, 0.85)
+        secondary, s_hover, s_active = s, _hsv_scale(s, 0.9, 0.9), _hsv_scale(s, 0.5, 0.85)
+        s_semi = _hsv_scale(s, 0.9, 0.7)
     else:
-        primary, secondary, tab = _hsv_scale(p, 0.8, 0.35), _hsv_scale(s, 0.9, 0.25), _hsv_scale(s, 0.9, 0.75)
+        primary, p_hover, p_active = _hsv_scale(p, 0.8, 0.35), _hsv_scale(p, 0.9, 0.5), p
+        secondary, s_hover, s_active = _hsv_scale(s, 0.9, 0.25), _hsv_scale(s, 0.9, 0.5), s
+        s_semi = _hsv_scale(s, 0.9, 0.75)
     out = dict(colors)
-    out.update({"GUI_COLOR_BUTTON": primary, "GUI_COLOR_TITLE_BACKGROUND_ACTIVE": primary,
-                "GUI_COLOR_WIDGET_BACKGROUND": secondary, "GUI_COLOR_IMGUI_HEADER": secondary,
-                "GUI_COLOR_TAB_ACTIVE": tab})
+    out.update({
+        "GUI_COLOR_BUTTON": primary, "GUI_COLOR_BUTTON_HOVER": p_hover, "GUI_COLOR_BUTTON_ACTIVE": p_active,
+        "GUI_COLOR_TAB": primary, "GUI_COLOR_TAB_HOVER": s_hover, "GUI_COLOR_TAB_ACTIVE": s_semi,
+        "GUI_COLOR_IMGUI_HEADER": secondary, "GUI_COLOR_IMGUI_HEADER_HOVER": s_hover,
+        "GUI_COLOR_IMGUI_HEADER_ACTIVE": s_active,
+        "GUI_COLOR_WIDGET_BACKGROUND": secondary, "GUI_COLOR_WIDGET_BACKGROUND_HOVER": s_hover,
+        "GUI_COLOR_WIDGET_BACKGROUND_ACTIVE": s_active,
+        "GUI_COLOR_TITLE_BACKGROUND_ACTIVE": primary})
     return out
 
 
@@ -291,7 +315,7 @@ def _light(dark_items):
     # background it can be drawn on (the overlays above are translucent ink, so
     # they are relit, never darkened, and these backgrounds stay put)
     dark_bg = flatten(dark, _WINDOW)
-    light_bgs = [flatten(out, layers) for layers in [_WINDOW] + _CELL_BGS]
+    light_bgs = [flatten(out, layers) for layers in _ORDER_BGS + _CELL_BGS]
     for key in ink:
         rgba = dark[key]
         if rgba[3] == 1.0 and contrast_ratio(rgba, dark_bg) >= 3.0:

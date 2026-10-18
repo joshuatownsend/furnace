@@ -32,22 +32,29 @@ def test_preset_header_is_up_to_date():
 
 
 def test_gui_checks_the_same_pairs():
-    # settings.cpp's drawContrastCheck and CONTRAST_PAIRS must check the same pairs
+    # settings.cpp's drawContrastCheck and CONTRAST_PAIRS must check the same
     src = (scheme._REPO / "src" / "gui" / "settings.cpp").read_text(encoding="utf-8")
     body = src[src.index("void FurnaceGUI::drawContrastCheck"):]
 
     def table(name):
         start = body.index(name)
-        return re.findall(r"GUI_COLOR_\w+", body[start + len(name):body.index("};", start)])
+        return body[start + len(name):body.index("};", start)]
 
-    widgets = re.findall(r"\{(GUI_COLOR_\w+),\{\{(GUI_COLOR_\w+),", body[:body.index("};", body.index("pairs={"))])
-    assert widgets == [(fg, bgs[0][0]) for fg, bgs in scheme.CONTRAST_PAIRS[:10]]
-    assert table("patternRowOverlays[]={") == scheme._ROW_OVERLAYS
-    assert table("patternCellOverlays[]={") == scheme._CELL_OVERLAYS
-    assert table("rowText[]={") == scheme._ROW_TEXT
-    assert table("patternText[]={") == scheme._PATTERN_TEXT
+    # the widget and order rows: text color, then the name of each background
+    widgets = []
+    for line in table("pairs={").splitlines():
+        names = re.findall(r"GUI_COLOR_\w+", re.sub(r"uiColors\[\w+\]", "", line))  # names, not lookups
+        if names:
+            widgets.append((names[0], names[1:]))
+    assert widgets == [(fg, [bg[0] for bg in bgs]) for fg, bgs in scheme.CONTRAST_PAIRS[:10]]
+    assert re.findall(r"GUI_COLOR_\w+", table("patternRowOverlays[]={")) == scheme._ROW_OVERLAYS
+    stacks = re.findall(r"\{(GUI_COLOR_\w+),(GUI_COLOR_\w+|-1)\}", table("patternCellStacks[][2]={"))
+    assert [tuple(k for k in s if k != "-1") for s in stacks] == scheme._CELL_STACKS
+    assert re.findall(r"GUI_COLOR_\w+", table("rowText[]={")) == scheme._ROW_TEXT
+    assert re.findall(r"GUI_COLOR_\w+", table("patternText[]={")) == scheme._PATTERN_TEXT
     assert scheme.CONTRAST_PAIRS[10:] == ([(k, scheme._ROW_BGS) for k in scheme._ROW_TEXT]
                                           + [(k, scheme._CELL_BGS) for k in scheme._PATTERN_TEXT])
+
 
 
 def test_contrast_check_flags_unreadable_text():
@@ -57,16 +64,15 @@ def test_contrast_check_flags_unreadable_text():
     assert ("GUI_COLOR_TEXT", "GUI_COLOR_FRAME_BACKGROUND") in low
 
 
-def test_dark_defaults_fail_under_the_hovered_cursor():
-    # upstream's own defaults: eleven pattern colors are below AA, worst of all on
-    # the light blue hovered cursor
-    low = [(fg[18:], bg[18:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
-    assert low == [
-        ("INS", "CURSOR_HOVER", 2.69), ("INS_ERROR", "CURSOR_HOVER", 1.55), ("VOLUME_MAX", "CURSOR_HOVER", 4.37),
-        ("VOLUME_HALF", "CURSOR_HOVER", 2.42), ("EFFECT_INVALID", "CURSOR_HOVER", 1.5),
-        ("EFFECT_VOLUME", "CURSOR_HOVER", 4.37), ("EFFECT_SONG", "CURSOR_HOVER", 1.5),
-        ("EFFECT_TIME", "CURSOR_HOVER", 1.04), ("EFFECT_SPEED", "CURSOR_HOVER", 1.91),
-        ("EFFECT_SYS_SECONDARY", "CURSOR_HOVER", 4.46), ("EFFECT_MISC", "CURSOR_HOVER", 1.09)]
+def test_dark_defaults_fail_on_pressed_widgets_and_the_hovered_cursor():
+    # upstream's own defaults: white text on pressed buttons, inputs and headers,
+    # and eleven pattern colors, worst on the light blue hovered cursor
+    low = [(fg[10:], bg[10:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
+    assert low[:3] == [("TEXT", "BUTTON_ACTIVE", 3.58), ("TEXT", "WIDGET_BACKGROUND_ACTIVE", 3.0),
+                       ("TEXT", "IMGUI_HEADER_ACTIVE", 3.0)]
+    assert [(fg[8:], bg) for fg, bg, _ in low[3:]] == [(k, "PATTERN_CURSOR_HOVER") for k in (
+        "INS", "INS_ERROR", "VOLUME_MAX", "VOLUME_HALF", "EFFECT_INVALID", "EFFECT_VOLUME",
+        "EFFECT_SONG", "EFFECT_TIME", "EFFECT_SPEED", "EFFECT_SYS_SECONDARY", "EFFECT_MISC")]
 
 
 

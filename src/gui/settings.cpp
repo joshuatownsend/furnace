@@ -564,26 +564,34 @@ void FurnaceGUI::drawContrastCheck() {
   ImVec4 base=opaqueBackground(uiColors);
   ImVec4 window=colorOver(sty.Colors[ImGuiCol_WindowBg],base);
   ImVec4 pattern=colorOver(uiColors[GUI_COLOR_PATTERN_BG],window);
+  auto styleBg=[&](int name, ImGuiCol col) -> ContrastBg {
+    return {name,colorOver(sty.Colors[col],window)};
+  };
+  ImVec4 orderActive=colorOver(uiColors[GUI_COLOR_ORDER_ACTIVE],window);
   std::vector<ContrastPair> pairs={
     {GUI_COLOR_TEXT,{{GUI_COLOR_FRAME_BACKGROUND,window}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_FRAME_BACKGROUND_POPUP,colorOver(sty.Colors[ImGuiCol_PopupBg],window)}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_MENU_BAR,colorOver(sty.Colors[ImGuiCol_MenuBarBg],window)}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_BUTTON,colorOver(sty.Colors[ImGuiCol_Button],window)}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_WIDGET_BACKGROUND,colorOver(sty.Colors[ImGuiCol_FrameBg],window)}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_IMGUI_HEADER,colorOver(sty.Colors[ImGuiCol_Header],window)}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_TAB_ACTIVE,colorOver(sty.Colors[ImGuiCol_TabSelected],window)}}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_FRAME_BACKGROUND_POPUP,ImGuiCol_PopupBg)}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_MENU_BAR,ImGuiCol_MenuBarBg)}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_BUTTON,ImGuiCol_Button),styleBg(GUI_COLOR_BUTTON_HOVER,ImGuiCol_ButtonHovered),styleBg(GUI_COLOR_BUTTON_ACTIVE,ImGuiCol_ButtonActive)}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_WIDGET_BACKGROUND,ImGuiCol_FrameBg),styleBg(GUI_COLOR_WIDGET_BACKGROUND_HOVER,ImGuiCol_FrameBgHovered),styleBg(GUI_COLOR_WIDGET_BACKGROUND_ACTIVE,ImGuiCol_FrameBgActive)}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_IMGUI_HEADER,ImGuiCol_Header),styleBg(GUI_COLOR_IMGUI_HEADER_HOVER,ImGuiCol_HeaderHovered),styleBg(GUI_COLOR_IMGUI_HEADER_ACTIVE,ImGuiCol_HeaderActive)}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_TAB,ImGuiCol_Tab),styleBg(GUI_COLOR_TAB_HOVER,ImGuiCol_TabHovered),styleBg(GUI_COLOR_TAB_ACTIVE,ImGuiCol_TabSelected)}},
     {GUI_COLOR_TEXT,{{GUI_COLOR_TITLE_BACKGROUND_ACTIVE,colorOver(sty.Colors[ImGuiCol_TitleBgActive],base)}}},
-    {GUI_COLOR_TEXT,{{GUI_COLOR_TABLE_HEADER,colorOver(sty.Colors[ImGuiCol_TableHeaderBg],window)}}},
-    {GUI_COLOR_ORDER_ROW_INDEX,{{GUI_COLOR_FRAME_BACKGROUND,window}}},
+    {GUI_COLOR_TEXT,{styleBg(GUI_COLOR_TABLE_HEADER,ImGuiCol_TableHeaderBg)}},
+    // order numbers: plain, the playing order, the song loop, or both
+    {GUI_COLOR_ORDER_ROW_INDEX,{{GUI_COLOR_FRAME_BACKGROUND,window},{GUI_COLOR_ORDER_ACTIVE,orderActive},{GUI_COLOR_SONG_LOOP,colorOver(uiColors[GUI_COLOR_SONG_LOOP],window)},{GUI_COLOR_SONG_LOOP,colorOver(uiColors[GUI_COLOR_SONG_LOOP],orderActive)}}},
   };
-  // pattern text sits on the pattern, on highlighted rows and the play head
-  // (row index too), and on the selection and the cursor, hovered or not
+  // pattern rows: plain, highlighted, the play head, or the row being edited
   const int patternRowOverlays[]={
-    GUI_COLOR_PATTERN_HI_1,GUI_COLOR_PATTERN_HI_2,GUI_COLOR_PATTERN_PLAY_HEAD
+    GUI_COLOR_PATTERN_HI_1,GUI_COLOR_PATTERN_HI_2,GUI_COLOR_PATTERN_PLAY_HEAD,
+    GUI_COLOR_EDITING,GUI_COLOR_EDITING_CLONE
   };
-  const int patternCellOverlays[]={
-    GUI_COLOR_PATTERN_SELECTION,GUI_COLOR_PATTERN_SELECTION_HOVER,
-    GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_CURSOR_HOVER
+  // cells on any row: selected, under the cursor, or both, hovered or not
+  // (top layer first; -1: none)
+  const int patternCellStacks[][2]={
+    {GUI_COLOR_PATTERN_SELECTION,-1},{GUI_COLOR_PATTERN_SELECTION_HOVER,-1},
+    {GUI_COLOR_PATTERN_CURSOR,-1},{GUI_COLOR_PATTERN_CURSOR_HOVER,-1},
+    {GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_SELECTION},{GUI_COLOR_PATTERN_CURSOR_HOVER,GUI_COLOR_PATTERN_SELECTION}
   };
   // row numbers sit on rows only; the inactive (dimmed placeholder) colors are
   // left out on purpose
@@ -602,7 +610,13 @@ void FurnaceGUI::drawContrastCheck() {
   std::vector<ContrastBg> rowBgs={{GUI_COLOR_PATTERN_BG,pattern}};
   for (int i: patternRowOverlays) rowBgs.push_back({i,colorOver(uiColors[i],pattern)});
   std::vector<ContrastBg> cellBgs=rowBgs;
-  for (int i: patternCellOverlays) cellBgs.push_back({i,colorOver(uiColors[i],pattern)});
+  for (const ContrastBg& row: rowBgs) {
+    for (const int* stack: patternCellStacks) {
+      ImVec4 c=row.color;
+      if (stack[1]>=0) c=colorOver(uiColors[stack[1]],c);
+      cellBgs.push_back({stack[0],colorOver(uiColors[stack[0]],c)});
+    }
+  }
   for (int i: rowText) pairs.push_back({i,rowBgs});
   for (int i: patternText) pairs.push_back({i,cellBgs});
 
@@ -624,10 +638,10 @@ void FurnaceGUI::drawContrastCheck() {
   }
   const int total=(int)pairs.size();
   if (low.empty()) {
-    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1) on every background they are drawn on."),total);
+    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1) on every background they are drawn on, hovered and pressed states included."),total);
     return;
   }
-  ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) and may be hard to read:"),(int)low.size(),total);
+  ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) on some background and may be hard to read:"),(int)low.size(),total);
   ImDrawList* dl=ImGui::GetWindowDrawList();
   ImGui::Indent();
   for (const LowContrast& l: low) {
@@ -688,7 +702,8 @@ void FurnaceGUI::pushAccentColors(const ImVec4& one, const ImVec4& two, const Im
   if (settings.guiColorsBase) {
     primary=primaryActive;
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.9,primaryHover.x,primaryHover.y,primaryHover.z);
-    ImGui::ColorConvertHSVtoRGB(hue,sat,val*0.5,primaryActive.x,primaryActive.y,primaryActive.z);
+    // pressed stays light enough for dark text (fork change: upstream halves the value)
+    ImGui::ColorConvertHSVtoRGB(hue,sat*0.5,val*0.85,primaryActive.x,primaryActive.y,primaryActive.z);
   } else {
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.5,primaryHover.x,primaryHover.y,primaryHover.z);
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.8,val*0.35,primary.x,primary.y,primary.z);
@@ -704,7 +719,8 @@ void FurnaceGUI::pushAccentColors(const ImVec4& one, const ImVec4& two, const Im
     secondary=secondaryActive;
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.7,secondarySemiActive.x,secondarySemiActive.y,secondarySemiActive.z);
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.9,secondaryHover.x,secondaryHover.y,secondaryHover.z);
-    ImGui::ColorConvertHSVtoRGB(hue,sat,val*0.5,secondaryActive.x,secondaryActive.y,secondaryActive.z);
+    // pressed stays light enough for dark text (fork change: upstream halves the value)
+    ImGui::ColorConvertHSVtoRGB(hue,sat*0.5,val*0.85,secondaryActive.x,secondaryActive.y,secondaryActive.z);
   } else {
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.75,secondarySemiActive.x,secondarySemiActive.y,secondarySemiActive.z);
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.5,secondaryHover.x,secondaryHover.y,secondaryHover.z);
@@ -915,7 +931,8 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
   if (settings.guiColorsBase) {
     primary=primaryActive;
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.9,primaryHover.x,primaryHover.y,primaryHover.z);
-    ImGui::ColorConvertHSVtoRGB(hue,sat,val*0.5,primaryActive.x,primaryActive.y,primaryActive.z);
+    // pressed stays light enough for dark text (fork change: upstream halves the value)
+    ImGui::ColorConvertHSVtoRGB(hue,sat*0.5,val*0.85,primaryActive.x,primaryActive.y,primaryActive.z);
   } else {
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.5,primaryHover.x,primaryHover.y,primaryHover.z);
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.8,val*0.35,primary.x,primary.y,primary.z);
@@ -931,7 +948,8 @@ void FurnaceGUI::applyUISettings(bool updateFonts) {
     secondary=secondaryActive;
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.7,secondarySemiActive.x,secondarySemiActive.y,secondarySemiActive.z);
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.9,secondaryHover.x,secondaryHover.y,secondaryHover.z);
-    ImGui::ColorConvertHSVtoRGB(hue,sat,val*0.5,secondaryActive.x,secondaryActive.y,secondaryActive.z);
+    // pressed stays light enough for dark text (fork change: upstream halves the value)
+    ImGui::ColorConvertHSVtoRGB(hue,sat*0.5,val*0.85,secondaryActive.x,secondaryActive.y,secondaryActive.z);
   } else {
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.75,secondarySemiActive.x,secondarySemiActive.y,secondarySemiActive.z);
     ImGui::ColorConvertHSVtoRGB(hue,sat*0.9,val*0.5,secondaryHover.x,secondaryHover.y,secondaryHover.z);

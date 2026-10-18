@@ -506,7 +506,8 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
                      f"then plays {notation.note_name(108 + t['target_semitones'])}")
     x = fsong.sample_pcm(smp)
     level = analysis.full_scale(smp.get("depth"))
-    at = np.flatnonzero(analysis.clipped_mask(x, level))
+    clip_mask = analysis.clipped_mask(x, level)
+    at = np.flatnonzero(clip_mask)
     clipped = len(at)
     if clipped:
         lines.append(f"clipping: {clipped} samples sit flat at full scale ({100 * clipped / len(x):.1f}% "
@@ -522,7 +523,7 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
     span = (int(m.group(1)), int(m.group(2))) if m else (0, len(x))
     tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
     png = picture.draw_sample(x, loop, span, _render_dir() / f"{p.stem}_{tag}_smp{sample:02X}.png",
-                              clip=(level, -1.0))
+                              clipped=clip_mask)
     lines.append(f"image: {png}")
     return ["\n".join(lines), Image(path=png)]
 

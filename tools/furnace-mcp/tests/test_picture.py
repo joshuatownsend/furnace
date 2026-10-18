@@ -149,6 +149,8 @@ def test_clipped_runs_count_flat_tops_only():
     alt = np.tile([level, -1.0], 50)  # straight from rail to rail: no flat top
     assert analysis.clipped_runs(alt, level) == 0
     assert analysis.clipped_runs(np.full(10, -127 / 128), level) == 0  # the rail is -128
-    _, _, clipped = picture._columns(np.full((10, 1), -127 / 128), 1, (level, -1.0))
-    assert not clipped[0]
+    lone = np.zeros(100)
+    lone[30] = level  # a lone peak: the text doesn't count it, so the picture mustn't mark it
+    _, _, clipped = picture._columns(lone.reshape(-1, 1), 10, analysis.clipped_mask(lone, level))
+    assert not clipped.any()
     assert level == 127 / 128 and analysis.full_scale(16) == 32767 / 32768

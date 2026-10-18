@@ -86,15 +86,16 @@ def _clock(t, step):
 
 def _columns(x, w, clip=CLIP):
     """(top, bottom, clipped) per pixel column of samples x (frames x outputs).
-    clip: the level counted as full scale, or (positive, negative) rails for PCM,
-    where 8-bit audio reaches 127/128 up but -1 down."""
-    pos, neg = clip if isinstance(clip, tuple) else (clip, -clip)
+    clip: the level counted as full scale, or a mask with one flag per sample
+    (a sample's own clipping test, analysis.clipped_mask, which skips lone peaks)."""
     hi, lo = x.max(axis=1), x.min(axis=1)
     edges = np.linspace(0, len(hi), w + 1).astype(int)
     edges = np.minimum(edges, len(hi) - 1)
     top = np.maximum.reduceat(hi, edges[:-1])
     bot = np.minimum.reduceat(lo, edges[:-1])
-    return top, bot, (top >= pos - 1e-6) | (bot <= neg + 1e-6)
+    if isinstance(clip, np.ndarray):
+        return top, bot, np.logical_or.reduceat(clip, edges[:-1])
+    return top, bot, np.maximum(top, -bot) >= clip
 
 
 def _draw_wave(img, x0, y0, w, h, x, color, clip=CLIP):
@@ -365,12 +366,13 @@ def _loop_seam(x, loop, k=48):
     return np.concatenate([first, second]), len(first), title, note
 
 
-def draw_sample(x, loop, span, out_png, *, clip=CLIP, width=1200, ffmpeg="ffmpeg"):
+def draw_sample(x, loop, span, out_png, *, clipped=None, width=1200, ffmpeg="ffmpeg"):
     """Picture of a sample (floats, one channel): the whole sample with the part
     measured shaded and the loop points marked, then a close-up of the loop seam
     (the end of the loop joined to its start, as it plays: a jump there clicks),
-    or of the start of the measured part when there is no loop. clip: the level
-    drawn as clipped (analysis.full_scale for the sample's depth)."""
+    or of the start of the measured part when there is no loop. clipped: one flag
+    per sample, from analysis.clipped_mask, so the picture marks exactly what the
+    text reports (default: anything at 16-bit full scale)."""
     exe = find_ffmpeg(ffmpeg)
     x = np.asarray(x, np.float32).reshape(-1, 1)
     n = max(len(x), 1)
@@ -381,6 +383,7 @@ def draw_sample(x, loop, span, out_png, *, clip=CLIP, width=1200, ffmpeg="ffmpeg
     texts = []
     y = gap
     a, b = span
+    clip = CLIP if clipped is None else np.asarray(clipped, bool)
     _draw_wave(img, left, y, pw, whole_h, x, _MIX, clip)
     xa, xb = left + int(a / n * (pw - 1)), left + int(b / n * (pw - 1))
     shade = img[y:y + whole_h, xa:xb + 1]
@@ -398,11 +401,15 @@ def draw_sample(x, loop, span, out_png, *, clip=CLIP, width=1200, ffmpeg="ffmpeg
     y += whole_h + 18
     if loop:
         seam, cut, title, note = _loop_seam(x, loop)
+        seam_clip = clip if clipped is None else _loop_seam(clip.reshape(-1, 1), loop)[0][:, 0]
     else:
         seam, cut = x[a:a + 96], None
+        seam_clip = clip if clipped is None else clip[a:a + 96]
         title, note = "measured part", f"samples {a}-{a + len(seam)}"
     if len(seam) >= 2:
-        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE, clip)
+        if isinstance(seam_clip, np.ndarray):  # follow the close-up's resampling
+            seam_clip = seam_clip[np.round(np.linspace(0, len(seam) - 1, pw * 4)).astype(int)]
+        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE, seam_clip)
         if cut:
             _mark(img, texts, left + int(cut / len(seam) * (pw - 1)), y, y + close_h, "", _CLIPPED)
     texts.append((6, y + 4, title, 13, _TEXT))

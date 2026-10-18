@@ -22,6 +22,7 @@
 #include "IconsFontAwesome4.h"
 #include "../gui.h"
 #include "../guiConst.h"
+#include "../colorPresets.h"
 #include "../util.h"
 #include "../intConst.h"
 
@@ -2451,6 +2452,17 @@ void FurnaceGUI::initSettings() {
   }
   CATEGORY_END
   CATEGORY_BEGIN(_N("Color")) {
+    SettingEntry(_N("Color scheme presets"),NULL,[this]{
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text(_("Presets:"));
+      for (int i=0; i<IM_ARRAYSIZE(guiColorPresets); i++) {
+        ImGui::SameLine();
+        if (ImGui::Button(fmt::sprintf("%s##colPreset%d",_(guiColorPresets[i].name),i).c_str())) {
+          askColorPreset(i);
+        }
+      }
+      return false;
+    }),
     SettingEntry(_N("Color scheme Import/Export/Reset defaults"),NULL,[this]{
       ImGui::AlignTextToFramePadding();
       ImGui::Text(_("Color scheme:"));
@@ -2469,6 +2481,10 @@ void FurnaceGUI::initSettings() {
       return false;
     }),
     SETTING_INV_CHECKBOX(_N("Guru mode"),basicColors),
+    SettingEntry(_N("Contrast check"),NULL,[this]{
+      drawContrastCheck();
+      return false;
+    }),
   },{
     SUBCATEGORY(_N("Interface"),{
       SettingEntry::SliderInt(
@@ -2484,7 +2500,12 @@ void FurnaceGUI::initSettings() {
           {_N("Dark##gcb0"),0},
           {_N("Light##gcb1"),1}
         }
-      ).Callback([this]{applyUISettings(false);}) BASIC_MODE,
+      ).Callback([this]{
+        applyUISettings(false);
+        // Dark/Light only restyles what basic mode derives from the accents;
+        // offer the matching preset when the windows are still the other way
+        if (colorSchemeMismatch()) askColorPreset(settings.guiColorsBase?1:0);
+      }) BASIC_MODE,
       SETTING_COLOR(GUI_COLOR_ACCENT_PRIMARY) BASIC_MODE,
       SETTING_COLOR(GUI_COLOR_ACCENT_SECONDARY) BASIC_MODE,
 #define GURU_MODE .Condition([this]{return !settings.basicColors;})

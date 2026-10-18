@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat e9988cf35..HEAD -- src/gui/settings.cpp src/gui/settings/allSettings.cpp src/gui/settings/loadSettings.cpp src/gui/guiConst.cpp`.
 
-- **Status**: SELECTED
+- **Status**: BUILT (presets, contrast check and Light hint, 2026-10-17; see Spike results)
 - **Verdict**: Advance
 - **Score**: 7/10 (my estimate; /ideate has not scored this)
 - **Lenses**: both (code check plus community demand)
@@ -44,6 +44,34 @@ The Dark/Light radio switches the Dear ImGui base style (`settings.cpp:700`), bu
 - **Role mapping.** 361 keys need grouping into roles (background, surface, text, muted text, accents, pattern colors, channel colors) before a palette can generate them. The grouping is the real work.
 - **Two repos.** A Perfect Palette export format lives in Josh's other project. This repo only needs the scheme file format. Ask Josh before changing anything outside this repo.
 - **Idea 014** will take scope colors from the theme, so keep scope and channel colors in the role map.
+
+## Spike results (2026-10-17)
+
+**Question 1: Light alone is not a light theme.** Confirmed from the code (`settings.cpp`, `applyUISettings`): the Dark/Light radio picks the Dear ImGui base style and how basic mode derives buttons, tabs and headers from the two accents. Window, popup and text colors still come from the 361-key table, whose defaults are dark (window black at 85%, text white). So "Light" gives light buttons on dark windows. That is why the Reddit asker found nothing.
+
+**Build it** (decision criteria): a scheme file alone makes the UI light, so the fork now ships:
+
+- **Presets in Settings > Color**: Dark (default) and Light buttons, with a confirmation, since a preset replaces every color. They are built into the binary (`src/gui/colorPresets.h`), not installed as files (question 2). A preset keeps the user's guru-mode and frame-shading choices.
+- **The Dark/Light radio offers the matching preset** when the choice doesn't match the window color (with the same confirmation). That is the discoverability fix for the Reddit question: choosing Light now leads to a light UI.
+- **A contrast check** in the Color tab: 31 text colors, each against every background it is drawn on, reported at its worst. That means UI text on windows, popups, the menu bar and the title bar, and on buttons, inputs, headers and tabs in their normal, hovered and pressed states; order numbers on the playing order and the song loop; and pattern text (notes, highlighted notes, instrument with its warning and error colors, the volume range, every effect) on plain, highlighted, play-head and edited rows, under the selection and the cursor, hovered or not, and their combinations. Left out on purpose: the dimmed placeholder colors, and rows of the previous and next pattern, which are drawn faded to recede. Each is held to WCAG AA (4.5:1); a failing color shows a sample of the text on its worst background and the ratio. It reads the applied style, so basic mode's derived colors count. Upstream's own dark defaults fail on pressed buttons, inputs and headers (white on bright blue, 3.0 to 3.6:1) and for twelve pattern colors under the light blue hovered cursor (down to 1.04:1).
+- **Pressed widgets in Light basic mode** now derive at half saturation and 85% value instead of upstream's half value, so dark text stays readable while a button is held or an input is being typed into.
+- **`python -m furnace_mcp.scheme check FILE`** runs the same check over an exported scheme file (question 4's prototype), deriving basic mode's colors from the accents as Furnace does; `... presets` regenerates the header.
+
+**Question 3: how many roles.** The Light preset is generated, not hand-edited (`light_scheme` in `tools/furnace-mcp/furnace_mcp/scheme.py`). Of the 361 keys, 61 are surfaces (backgrounds, buttons, cursors, selections), 11 keep their color (piano keys, backdrops, shadows), 4 are set by hand (text, disabled text, the two accents), and 285 are ink: hue-coded colors for pattern effects, instrument types, macros, files, channels, memory and scopes. Surfaces and ink keep their hue and get their lightness inverted in OKLab. Ink that was readable on the dark window is then darkened, along its own hue, until it passes AA on the light window and on every light pattern background. Ink that was meant to be subtle (grid lines, the note-off dot) stays subtle. The Light preset passes every check, in basic and guru mode.
+
+**Questions 4 and 5: Perfect Palette.** The same split is the mapping a palette needs. A Perfect Palette export only has to supply about eight roles:
+
+| Palette role | Scheme keys (each `GUI_COLOR_` + ...) |
+|---|---|
+| Background | `BACKGROUND`, `FRAME_BACKGROUND*`, `MENU_BAR`, `TITLE_*`, `TABLE_HEADER`, scope, sample, piano and memory backgrounds |
+| Surface (controls) | `BUTTON*`, `WIDGET_BACKGROUND*`, `TAB*`, `IMGUI_HEADER*`, `PATTERN_SELECTION*` |
+| Text | `TEXT`, `CHANNEL_FG`, `PATTERN_ACTIVE*`, `CLOCK_TEXT` |
+| Muted text | `TEXT_DISABLED`, `PATTERN_INACTIVE*`, `PATTERN_ROW_INDEX*`, `ORDER_ROW_INDEX` |
+| Accent 1 and 2 | `ACCENT_PRIMARY`, `ACCENT_SECONDARY` (basic mode derives buttons, tabs and headers from these), `CHECK_MARK`, `SLIDER_GRAB*`, `NAV_HIGHLIGHT`, `TEXT_LINK`, `PATTERN_CURSOR*` |
+| Warning, error | `WARNING`, `ERROR`, `DESTRUCTIVE`, `PATTERN_STATUS_WARNING`, `PATTERN_STATUS_ERROR` |
+| Hue-coded ink (about 250 keys) | Keep Furnace's hues; set the lightness for the palette's background, as `light_scheme` does |
+
+My recommendation stands: the converter belongs in Perfect Palette as a "Furnace scheme" export (key=value lines, colors as signed 0xAABBGGRR ints, as `scheme.pack` writes them). I changed nothing outside this repo and added no in-app link to perfectpalette.io. Both are Josh's call.
 
 ## Open questions
 

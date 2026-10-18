@@ -756,6 +756,7 @@ enum FurnaceGUIWarnings {
   GUI_WARN_NPR,
   GUI_WARN_QUIT_SETTINGS,
   GUI_WARN_RELOAD,
+  GUI_WARN_COLOR_PRESET,
   GUI_WARN_GENERIC
 };
 
@@ -3398,6 +3399,12 @@ class FurnaceGUI {
 
   void resetColors();
   void resetKeybinds();
+  // color presets (colorPresets.h) and the contrast check in Settings > Color
+  int colorPresetToLoad=0;
+  void askColorPreset(int index);
+  void applyColorPreset(int index);
+  bool colorSchemeMismatch();
+  void drawContrastCheck();
 
   bool splitBackupName(const char* input, String& backupName, struct tm& backupTime);
   void purgeBackups(int year, int month, int day);

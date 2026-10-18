@@ -77,7 +77,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
 <header style="display:flex;flex-direction:column;gap:10px">
   <h1>Furnace fork: feature portfolio</h1>
   <p>Ideas for the personal fork of the Furnace chiptune tracker, grounded in its code, upstream user requests, community demand, and the maintainer's own goal of composing and tuning instruments through Claude. Ideas 01-06 came from the first run. Ideas 07-13 come from a second run that researched what other Furnace users ask for. Ideas 14-17 come from comparing Furnace with other trackers. Ideas 18-21 connect Michael's Lumatone keyboard. Idea 22 came on 2026-10-18 from a report that models judge audio better with a waveform image.</p>
-  <div class="meta"><span>runs <b>2026-10-15</b>, <b>2026-10-17</b></span><span>status <b>2026-10-18</b>: 8 merged, 1 partly, every other idea has a brief</span><span>mode <b>quick</b></span><span>sha <b>5b9c00314</b></span><span>output <b>ideas/</b></span></div>
+  <div class="meta"><span>runs <b>2026-10-15</b>, <b>2026-10-17</b></span><span>status <b>2026-10-18</b>: 9 merged, 1 partly, every other idea has a brief</span><span>mode <b>quick</b></span><span>sha <b>5b9c00314</b></span><span>output <b>ideas/</b></span></div>
   <div class="funnel"><span>23 candidates</span><i>→</i><span>6 survivors</span><i>→</i><span>6 selected</span><i>+</i><span>15 added in run 2</span><i>·</i><span>11 parked</span><span>12 killed</span></div>
 </header>
 
@@ -132,7 +132,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
       <tr><td class="n">19</td><td>Lumatone layout import and microtonal input</td><td><span class="pill adv">Advance</span></td><td class="mono">7/10</td><td>both</td><td>Michael; microtonal players</td><td>Lumatone sends notes only; fork pitch is 12-tone (<code>engine.cpp:1840-1920</code>); <code>E5xx</code> detune is 0.78 cents a step</td><td>M</td><td>new-ground</td><td><span class="pill state" data-state="19">Brief written</span></td></tr>
       <tr><td class="n">20</td><td>Lumatone key lights that follow the song</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>both</td><td>Michael (and his videos)</td><td>MIDI out sends sysex (<code>rtmidi.cpp:180</code>); Lumatone Editor source holds the protocol</td><td>M</td><td>new-ground</td><td><span class="pill state" data-state="20">Brief written</span></td></tr>
       <tr><td class="n">21</td><td>Microtonal tuning tables (EDO, Scala, maybe MTS-ESP)</td><td><span class="pill val">Validate</span></td><td class="mono">6/10</td><td>both</td><td>Michael; #881 requesters</td><td>One tuning value per song (<code>song.h:312</code>); revived from the parked list</td><td>L</td><td>new-ground</td><td><span class="pill state" data-state="21">Brief written</span></td></tr>
-      <tr><td class="n">22</td><td>Show Claude the audio: waveform and spectrum images from the MCP tools</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh and Claude in composing sessions</td><td>004's blind test got 1 of 3 from text alone; mcp 2.x can return images; fframes' author reports models do better with waveforms</td><td>S–M</td><td>natural-fit</td><td><span class="pill state" data-state="22">Brief written</span></td></tr>
+      <tr><td class="n">22</td><td>Show Claude the audio: waveform and spectrum images from the MCP tools</td><td><span class="pill val">Validate</span></td><td class="mono">7/10</td><td>both</td><td>Josh and Claude in composing sessions</td><td>004's blind test got 1 of 3 from text alone; mcp 2.x can return images; fframes' author reports models do better with waveforms</td><td>S–M</td><td>natural-fit</td><td><span class="pill adv" data-state="22">Merged #14</span></td></tr>
     </tbody>
   </table></div>
   <div class="chain">01 JSON import ─┐
@@ -285,6 +285,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
       <dt>evidence</dt><dd>The author of <a href="https://github.com/dmtrKovalenko/fframes">fframes</a> reports that models judge audio "significantly better" with a waveform image than with a text summary. Our own 004 blind test got 1 of 3 on instrument edits from text alone. The <code>mcp</code> 2.x library can return images, and numpy and ffmpeg can draw them, so there are no new dependencies.</dd>
       <dt>shape</dt><dd>An optional image on four tools, in order: <code>render</code> (a waveform per channel with order lines and a spectrum strip), <code>preview_instrument</code> (envelope, close-ups, harmonic bars), <code>detect_sample_pitch</code> (loop points and measured part), and an <code>export_video</code> contact sheet. The text reports stay.</dd>
       <dt>open gap</dt><dd>Whether Claude Code passes the image through here, and whether it helps. A blind A/B test on six tasks with known answers decides. Images cost about 1-2k tokens each, so they stay opt-in. fframes itself is not used: its waveform command needs Rust and works only on fframes video projects. Brief: <code>ideas/022-show-claude-the-audio.md</code>.</dd>
+      <dt>result</dt><dd>Merged as #14 (2026-10-18), all four images. Blind test with fresh agents on eight questions: text plus image got 8 of 8, text alone 5 of 8 (two of them guesses). Images won on where things happen (which order clips, where a channel drops out), on a clicking loop, and on an instrument edit the text got wrong. The test also caught two drawing bugs: one-pixel clip marks were invisible, and idle chips were drawn as playing. Claude Code shows the images through the live server.</dd>
     </dl></div></details>
   </div>
 </section>
@@ -323,7 +324,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
 
 <section id="deliverables">
   <h2><span class="tag">OUT</span>Write-ups</h2>
-  <p>Status on 2026-10-18: 001-007 and 014 are merged, and 009 in part. Every other idea now has a brief. Next up: 022 (no one else needed), 018 when Michael has his Lumatone, and steps 1-4 of 019, which need no keyboard. Paste a kickoff prompt into a fresh Claude Code session in this repo to begin an item.</p>
+  <p>Status on 2026-10-18: 001-007, 014 and 022 are merged, and 009 in part. Every other idea now has a brief. Next up: 018 when Michael has his Lumatone, and steps 1-4 of 019, which need no keyboard. Paste a kickoff prompt into a fresh Claude Code session in this repo to begin an item.</p>
   <div class="deliv">
     <div class="d"><div class="row"><b>002 · CLI export parity</b><span class="pill adv">Handoff plan</span><code>ideas/002-cli-export-parity.md</code></div>
       <p>Eight verified steps that add <code>-furout</code>, <code>-jsonout</code>, <code>-s98out</code> and VGM options, put duration and loop in <code>-info</code>, and fix the <code>-o</code> collision. Each step ends in a byte-identical check against the current build.</p>
@@ -364,7 +365,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
       <p>Parses <code>.ltn</code> layouts and Scala tunings, measures the detune on three chips, and prototypes live detune from a virtual MIDI port. Steps 5-7 need Michael and the keyboard.</p>
       <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k19" type="button">Copy</button></div>
       <pre class="kick" id="k19">Read C:\dev\furnace\furnace\ideas\019-lumatone-layout-microtonal-input.md in full before doing anything. It is a design-spike brief: run spike steps 1-4 (they need no keyboard), answer the open questions, and report against its decision criteria. Scope: prove that Lumatone layouts plus a tuning can become Furnace notes with E5xx detune, and prototype live detune. Do not build beyond the spike; prototype work happens on a branch. Stop before steps 5-7, which need Michael and his Lumatone.</pre></div>
-    <div class="d"><div class="row"><b>022 · Show Claude the audio</b><span class="pill val">Spike brief</span><code>ideas/022-show-claude-the-audio.md</code></div>
+    <div class="d"><div class="row"><b>022 · Show Claude the audio</b><span class="pill adv">Merged #14</span><code>ideas/022-show-claude-the-audio.md</code></div>
       <p>Checks that Claude Code passes an MCP image through, adds an optional waveform-and-spectrum image to <code>render</code>, then blind-tests text only against text plus image on six tasks with known answers.</p>
       <div class="row"><span class="mono" style="color:var(--muted);font-size:.75rem">kickoff prompt</span><button class="copy" data-for="k22" type="button">Copy</button></div>
       <pre class="kick" id="k22">Read C:\dev\furnace\furnace\ideas\022-show-claude-the-audio.md in full before doing anything. It is a design-spike brief: run the spike steps in order, answer the open questions, and report against its decision criteria. Scope: add an optional waveform-and-spectrum image to the furnace-mcp render tool and blind-test whether it helps Claude answer questions about the audio. Work only in tools/furnace-mcp, on a branch. Do not build items 2-4 until the blind test says to. Use fresh agents for the blind trials so no agent grades its own work.</pre></div>
@@ -374,7 +375,7 @@ footer{color:var(--muted);font-size:.85rem;border-top:1px solid var(--line);padd
   </div>
 </section>
 
-<footer>Generated by /ideate at <span class="mono">5b9c00314</span> (run 1). Ideas 07-21 were added on 2026-10-17 from community-demand research, a comparison with other trackers, and Michael's Lumatone. Status last updated 2026-10-18 (PRs #1-#13; briefs for every idea through 022). The markdown files in <code>ideas/</code> are the source of truth.</footer>
+<footer>Generated by /ideate at <span class="mono">5b9c00314</span> (run 1). Ideas 07-21 were added on 2026-10-17 from community-demand research, a comparison with other trackers, and Michael's Lumatone. Status last updated 2026-10-18 (PRs #1-#14; briefs for every idea through 022). The markdown files in <code>ideas/</code> are the source of truth.</footer>
 </div>
 <script>
 document.addEventListener('click',function(e){

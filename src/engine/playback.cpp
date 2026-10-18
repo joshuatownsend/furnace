@@ -2117,8 +2117,10 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
   // don't let user play anything during export
   if (exporting && liveTest.empty()) pendingNotes.clear();
 
-  // fork prototype (ideas/019): -livetest MIDI events, by tick
-  if (!liveTest.empty() && !skipping) {
+  // fork prototype (ideas/019): -livetest MIDI events, by tick. Low-latency
+  // mode calls this tickMult times a tick; subticks<=1 means this call is the
+  // one that runs the full tick.
+  if (!liveTest.empty() && !skipping && subticks<=1) {
     while (liveTestPos<liveTest.size() && liveTest[liveTestPos].tick<=liveTestTick) {
       const LiveTestEvent& ev=liveTest[liveTestPos++];
       bool on=(ev.type&0xf0)==TA_MIDI_NOTE_ON && ev.data1>0;

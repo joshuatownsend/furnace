@@ -49,7 +49,7 @@ async def test_tools_listed():
         names = {t.name for t in (await c.list_tools()).tools}
     assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
                      "read_instrument", "write_instrument", "render", "preview_instrument",
-                     "export", "export_video"}
+                     "export", "export_video", "detect_sample_pitch", "tune_sample"}
 
 
 async def test_inspect(demo):
@@ -365,3 +365,85 @@ async def test_export_video_rejects_bad_input(demo, tmp_path):
                                                       "size": "321x180"})
     assert bad_ext.is_error and ".mp4" in bad_ext.content[0].text
     assert bad_size.is_error and "even" in bad_size.content[0].text
+
+
+# --- sample pitch (idea 005) ----------------------------------------------
+
+IBIZA = REPO / "demos" / "amiga" / "Ibiza.fur"
+
+
+@pytest.fixture
+def ibiza(tmp_path):
+    p = tmp_path / "ibiza.fur"
+    shutil.copyfile(IBIZA, p)
+    return str(p)
+
+
+async def test_detect_sample_pitch(ibiza):
+    async with Client(mcp) as c:
+        piano = text(await c.call_tool("detect_sample_pitch", {"path": ibiza, "sample": 9}))
+        hat = text(await c.call_tool("detect_sample_pitch", {"path": ibiza, "sample": 2}))
+    # a 16-bit looped piano, measured on its loop; its instrument's pitch macro is flagged
+    assert "16-bit PCM" in piano and "the loop (6992-7280)" in piano, piano
+    assert "plays C-6 +16." in piano and "25088 Hz" in piano and "pitch macro" in piano, piano
+    assert "no clear pitch" in hat, hat
+    assert not Path(ibiza).with_name("ibiza.bak.fur").exists()
+
+
+def _play_c4(song, sample, wav):
+    """Render a written C-4 of the first instrument on sample, its macros removed
+    so only the sample's tuning counts; (Hz, note number nearest to it)."""
+    from furnace_mcp import analysis
+    ins = fsong.sample_instruments(song, sample)[0]
+    s = json.loads(json.dumps(song))
+    s["instruments"][ins]["macros"] = []
+    preview, on, off = fsong.preview_song(s, ins, 108, fsong.instrument_channel(s, ins), hold_rows=8,
+                                          release_rows=1)
+    (_, out), = fsong.render(preview, wav)
+    hz = analysis.analyze_note(out, 108, note_off_s=off, note_on_s=on)["pitch"]["hz"]
+    return hz, analysis.note_of(hz)
+
+
+async def test_tune_sample_plays_in_tune(tmp_path):
+    # the real proof: render a note before and after tuning. Ibiza's piano sample
+    # (16-bit, 16 cents sharp) on a Ricoh RF5C68, whose rates aren't rounded to
+    # whole periods like the Amiga's
+    song = fsong.load(REPO / "demos" / "misc" / "Sonic_CD_House_RF5C68.fur")
+    song["samples"][4] = fsong.load(IBIZA)["samples"][9]
+    p = tmp_path / "rf.fur"
+    fsong.save(song, p)
+    _, (note, before) = _play_c4(song, 4, tmp_path / "before.wav")
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("tune_sample", {"path": str(p), "sample": 4}))
+    assert "25327 -> 25088 Hz" in out and "C-4 now plays C-6" in out and "2 octaves up" in out, out
+    tuned = fsong.load(p)
+    assert tuned["samples"][4]["centerRate"] == 25088
+    _, (note_after, after) = _play_c4(tuned, 4, tmp_path / "after.wav")
+    assert note == note_after == 108 + 24 and before > 8, (note, before)
+    assert abs(after) < 10, after
+
+
+async def test_tune_sample_8bit_and_again(tmp_path):
+    p = tmp_path / "amigamen.fur"
+    shutil.copyfile(REPO / "demos" / "amiga" / "The Amigamen.fur", p)
+    async with Client(mcp) as c:
+        out = text(await c.call_tool("tune_sample", {"path": str(p), "sample": 3}))
+        assert "8-bit PCM" in out and "14716 -> 14687 Hz" in out and "notes play as written" in out, out
+        again = text(await c.call_tool("tune_sample", {"path": str(p), "sample": 3}))
+        assert "already in tune" in again, again
+        # transposed: a written C-4 sounds C-3, at half the rate
+        down = text(await c.call_tool("tune_sample", {"path": str(p), "sample": 3, "c4_plays": "C-3"}))
+        assert "14687 -> 7343 Hz" in down and "1 octave down" in down, down
+    assert fsong.load(p)["samples"][3]["centerRate"] == 7343
+
+
+async def test_tune_sample_refuses_no_pitch_and_other_depths(ibiza):
+    async with Client(mcp) as c:
+        hat = await c.call_tool("tune_sample", {"path": ibiza, "sample": 2})
+        brr = await c.call_tool("detect_sample_pitch", {
+            "path": str(REPO / "demos" / "snes" / "Breezy.fur"), "sample": 1})
+        missing = await c.call_tool("detect_sample_pitch", {"path": ibiza, "sample": 40})
+    assert hat.is_error and "nothing was changed" in hat.content[0].text
+    assert not Path(ibiza).with_name("ibiza.bak.fur").exists()
+    assert brr.is_error and "depth 9 (BRR)" in brr.content[0].text
+    assert missing.is_error and "out of range" in missing.content[0].text

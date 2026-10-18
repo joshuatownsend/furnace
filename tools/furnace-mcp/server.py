@@ -8,6 +8,7 @@ Edits are saved in place; the first edit to a file in a session copies it to
 import functools
 import hashlib
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -391,6 +392,119 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
             f"held {off - on:g} s then released\nwav: {wav}")
     return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off, a4=a4,
                                                                                 note_on_s=on))
+
+
+def _sample_pitch(s, index):
+    """(sample, header line, detection, tuning or None) for sample index of song s."""
+    smp = fsong.sample(s, index)
+    x = fsong.sample_pcm(smp)
+    loop = fsong.sample_loop(smp)
+    seg, region = analysis.sample_segment(x, loop)
+    rate = smp.get("centerRate") or 0
+    if rate < 1:
+        raise ValueError(f"sample {index:02X} has no center rate")
+    det = analysis.detect_pitch(seg, rate)
+    a4 = float((s.get("songInfo") or {}).get("tuning") or 440.0)
+    tuning = None if det["hz"] is None else analysis.sample_tuning(
+        rate, det["period"], fsong.nominal_center_rate(s), a4)
+    looped = (f"loop {loop[0]}-{loop[1]} ({fsong.LOOP_MODES[loop[2]] if loop[2] < 3 else loop[2]})"
+              if loop else "no loop")
+    head = (f"sample {index:02X} {smp.get('name', '')!r}: {fsong.SAMPLE_DEPTHS.get(smp.get('depth'))}, "
+            f"{smp.get('samples')} samples, center rate {rate} Hz, {looped}; measured on {region}")
+    if tuning and loop and loop[0] >= 2048:
+        # a loop that starts late holds the note, but the attack before it is
+        # what short notes play, and a loop can be cut slightly off pitch
+        body = analysis.detect_pitch(analysis.sample_segment(x[:loop[0]])[0], rate)
+        if body["hz"]:
+            diff = 1200 * math.log2(body["hz"] / det["hz"])
+            if abs(diff) >= 5:
+                head += (f"\nnote: the part before the loop plays {abs(diff):.0f} cents "
+                         f"{'higher' if diff > 0 else 'lower'} than the loop (it is tuned to the loop)")
+    return smp, head, det, tuning
+
+
+def _plays(t):
+    return f"{notation.note_name(t['plays_note'])} {t['plays_cents']:+.1f} cents ({t['plays_hz']:.2f} Hz)"
+
+
+def _octave_advice(semis):
+    octs = semis // 12
+    if not octs:
+        return "notes play as written"
+    return (f"notes sound {_octaves(abs(octs))} {'up' if octs > 0 else 'down'}: write "
+            f"{_octaves(abs(octs))} {'lower' if octs > 0 else 'higher'} than the pitch you want")
+
+
+def _sample_users(s, index):
+    """Instruments that start on this sample, flagging arp/pitch macros (which
+    shift it again on top of its tuning)."""
+    out = []
+    for i in fsong.sample_instruments(s, index):
+        ins = s["instruments"][i]
+        codes = {m.get("code") for m in ins.get("macros") or [] if m.get("data")}
+        extra = " and ".join(n for c, n in ((1, "an arp macro"), (4, "a pitch macro")) if c in codes)
+        out.append(f"{i:02X} {ins.get('name', '')!r}" + (f" (has {extra}, which shifts it further)" if extra else ""))
+    return "used by instruments: " + ", ".join(out) if out else "no instrument starts on it"
+
+
+@_tool(_READ)
+def detect_sample_pitch(sample: int, path: str = "") -> str:
+    """Measure the pitch of a sample (8- or 16-bit PCM): what a written C-4 plays,
+    as a note and cents, with a confidence (0-1; below 0.7, check by ear). It
+    measures the loop if the sample has one (that holds the note), else the
+    steady part after the attack. Noise, drums and chords report "no clear
+    pitch" instead of a guess. Also says what tune_sample would set the center
+    rate to. Doesn't change the song."""
+    s = _load(_path(path))
+    _, head, det, t = _sample_pitch(s, sample)
+    lines = [head]
+    if t is None:
+        lines.append(f"pitch: no clear pitch: {det['reason']}. Tune it by ear if it needs it.")
+    else:
+        lines.append(f"pitch: a written C-4 plays {_plays(t)}, confidence {det['confidence']:.2f}"
+                     + (" (low: check by ear)" if det["confidence"] < 0.7 else ""))
+        lines.append(f"tune_sample would set the center rate to {t['new_rate']} Hz: a written C-4 "
+                     f"then plays {notation.note_name(108 + t['target_semitones'])}")
+    lines.append(_sample_users(s, sample))
+    return "\n".join(lines)
+
+
+@_tool(_EDIT)
+def tune_sample(sample: int, c4_plays: str = "", path: str = "") -> str:
+    """Tune a sample (8- or 16-bit PCM) by measuring its pitch and setting its
+    center rate, the "Hz" in Furnace's sample editor. By default a written C-4
+    then plays the C nearest the sample's own pitch: a recorded E then plays E on
+    an E, and the rate moves by half an octave at most (rates far above the
+    recording's can exceed what a chip plays). c4_plays (e.g. "C-4", "C-2")
+    instead sets the note a written C-4 sounds, transposing the sample.
+    Refuses samples with no clear pitch. Saves the song."""
+    p = _path(path)
+    s = _load(p)
+    smp, head, det, t = _sample_pitch(s, sample)
+    if t is None:
+        raise ValueError(f"{head}\nno clear pitch ({det['reason']}), so nothing was changed. "
+                         "Tune it by ear in the sample editor.")
+    if c4_plays:
+        a4 = float((s.get("songInfo") or {}).get("tuning") or 440.0)
+        t = analysis.sample_tuning(smp["centerRate"], det["period"], fsong.nominal_center_rate(s),
+                                   a4, c4_plays=notation.parse_note(c4_plays))
+    new, old = t["new_rate"], smp["centerRate"]
+    if not 100 <= new <= 384000:
+        raise ValueError(f"that needs a center rate of {new} Hz, outside what Furnace accepts "
+                         "(100-384000); pick a c4_plays nearer the sample's own pitch")
+    target = notation.note_name(108 + t["target_semitones"])
+    lines = [head, f"was: a written C-4 played {_plays(t)}, confidence {det['confidence']:.2f}"
+             + (" (low: check by ear)" if det["confidence"] < 0.7 else "")]
+    if new == old:
+        lines.append(f"already in tune: a written C-4 plays {target}; nothing changed")
+        return "\n".join(lines)
+    smp["centerRate"] = new
+    note = _save(p, s)
+    lines.append(f"center rate {old} -> {new} Hz: a written C-4 now plays {target} "
+                 f"({t['residual_cents']:+.2f} cents from rounding the rate to whole Hz); "
+                 + _octave_advice(t["target_semitones"]))
+    lines.append(_sample_users(s, sample))
+    return "\n".join(lines) + note
 
 
 @_tool(_EDIT)

@@ -86,13 +86,15 @@ def _clock(t, step):
 
 def _columns(x, w, clip=CLIP):
     """(top, bottom, clipped) per pixel column of samples x (frames x outputs).
-    clip: the level counted as full scale (8-bit audio tops out at 127/128)."""
+    clip: the level counted as full scale, or (positive, negative) rails for PCM,
+    where 8-bit audio reaches 127/128 up but -1 down."""
+    pos, neg = clip if isinstance(clip, tuple) else (clip, -clip)
     hi, lo = x.max(axis=1), x.min(axis=1)
     edges = np.linspace(0, len(hi), w + 1).astype(int)
     edges = np.minimum(edges, len(hi) - 1)
     top = np.maximum.reduceat(hi, edges[:-1])
     bot = np.minimum.reduceat(lo, edges[:-1])
-    return top, bot, np.maximum(top, -bot) >= clip
+    return top, bot, (top >= pos - 1e-6) | (bot <= neg + 1e-6)
 
 
 def _draw_wave(img, x0, y0, w, h, x, color, clip=CLIP):

@@ -415,7 +415,8 @@ def clipped_runs(x, level):
     x = np.asarray(x)
     if len(x) < 2:
         return 0
-    pos, neg = x >= level - 1e-6, x <= -(level - 1e-6)
+    # PCM is asymmetric: the negative rail is -1 (-128/128, -32768/32768)
+    pos, neg = x >= level - 1e-6, x <= -1 + 1e-6
     pair = (pos[1:] & pos[:-1]) | (neg[1:] & neg[:-1])
     return int((np.r_[pair, False] | np.r_[False, pair]).sum())
 

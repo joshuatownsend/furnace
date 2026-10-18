@@ -508,7 +508,7 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
     level = analysis.full_scale(smp.get("depth"))
     clipped = analysis.clipped_runs(x, level)
     if clipped:
-        at = np.flatnonzero(np.abs(x) >= level - 1e-6)
+        at = np.flatnonzero((x >= level - 1e-6) | (x <= -1 + 1e-6))
         lines.append(f"clipping: {clipped} samples sit flat at full scale ({100 * clipped / len(x):.1f}% "
                      f"of the sample, between samples {at[0]} and {at[-1]}). Unless it's a "
                      "square wave drawn at full scale, that's clipping in the recording, "
@@ -522,7 +522,7 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
     span = (int(m.group(1)), int(m.group(2))) if m else (0, len(x))
     tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
     png = picture.draw_sample(x, loop, span, _render_dir() / f"{p.stem}_{tag}_smp{sample:02X}.png",
-                              clip=level)
+                              clip=(level, -1.0))
     lines.append(f"image: {png}")
     return ["\n".join(lines), Image(path=png)]
 

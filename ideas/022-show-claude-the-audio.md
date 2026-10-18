@@ -86,7 +86,7 @@ Branch `idea-022-render-image`. Item 1 is built: `render(..., image=True)` retur
 
 **Step 2, order lines.** Each order's start is furnace's `-info` duration of the orders before it, run in parallel. A whole song takes under a second. The time axis follows the WAV, because furnace's timing walk can run a couple of ticks longer. One upstream quirk: the walk counts a speed effect two ticks late, so after a speed change the lines trail the audio by 33 ms. That's about one pixel. The test plants a `09xx`/`0Fxx` speed change and checks note onsets against the lines.
 
-**Step 3, the tasks.** Each task was planted on a copy, with its answer written down before any trial. The material and answers are in the session scratchpad, not the repo.
+**Step 3, the tasks.** Each task was planted on a copy, with its answer written down before any trial. `tools/furnace-mcp/examples/blind_test_022.py` rebuilds all the material and the answer key from the demo songs.
 
 1. Which orders does the mix clip in? (*All Good Times* 00-07 as it is: answer 04 and 07)
 2. One channel drops out for one order. Which channel, and which order? (ch0, order 04)
@@ -125,7 +125,7 @@ Agents with the image made 3–5 tool calls, against 2–3 for text only, and us
 4. In 4.1 the attack close-up at 20 ms decided it; in 4.3 the whole-note panel did. Keep both.
 5. Yes: the PNG sits beside the WAV, and its path is in the report.
 
-**Caveats.** One agent per arm per trial. I designed the tasks, and tasks 1-2 were rerun after fixes. Text did better on the instrument edits than in 004 (2 of 3, against 1 of 3). The 004 report fixes probably account for that.
+**Caveats.** In tasks 5 and 6 the text arm got `render` reports, which hold no envelope or transient numbers. In real use Claude would turn to `preview_instrument` or `detect_sample_pitch` for those questions. The verdict doesn't depend on them: tasks 1 and 4.1 alone clear the bar, and image wins the instrument trials 3 of 3 either way. One agent per arm per trial. I designed the tasks, and tasks 1-2 were rerun after fixes. Text did better on the instrument edits than in 004 (2 of 3, against 1 of 3). The 004 report fixes probably account for that.
 
 **Verdict: build it.** Images win on 3 tasks outright (1, 4.1, 5), and on 5 if stated guesses don't count. That clears the "at least two more" bar. They also won the instrument-edit trials 3 of 3. Next: items 2-4, with the task-4 close-up layout as the starting point for `preview_instrument(image=True)`. One decision for Josh: whether the cost of about 2k tokens per image is acceptable, which decides whether `preview_instrument` shows images by default.
 

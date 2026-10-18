@@ -322,9 +322,12 @@ def render(order_start: int = 0, order_end: int | None = None,
     a spectrogram under it, then one waveform per audible channel on a shared scale
     (full scale fills a row, so quiet looks quiet), clipped columns in red, and a
     line at each order labelled in hex. Use it for where things happen and what
-    they look like; take exact numbers from the text.
+    they look like; take exact numbers from the text. image also renders every
+    channel, so it takes as long as per_channel.
     Note: effects that jump outside the range, or state set before order_start, may
     sound different in an excerpt."""
+    if image:
+        video.find_ffmpeg()  # before the render: missing ffmpeg shouldn't cost a long wait
     p = _path(path)
     s = _load(p)
     sub = fsong.subsong(s, subsong)

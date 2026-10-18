@@ -25,6 +25,7 @@
 #include "../utfutils.h"
 #include "util.h"
 #include "guiConst.h"
+#include "colorPresets.h"
 #include "intConst.h"
 #include "IconsFontAwesome4.h"
 #include "furIcons.h"
@@ -488,6 +489,130 @@ void FurnaceGUI::resetColors() {
   for (int i=0; i<GUI_COLOR_MAX; i++) {
     uiColors[i]=ImGui::ColorConvertU32ToFloat4(guiColors[i].defaultColor);
   }
+}
+
+#define COLOR_PRESET_COUNT ((int)(sizeof(guiColorPresets)/sizeof(guiColorPresets[0])))
+
+void FurnaceGUI::askColorPreset(int index) {
+  if (index<0 || index>=COLOR_PRESET_COUNT) return;
+  colorPresetToLoad=index;
+  showWarning(fmt::sprintf(_("Load the %s color preset? It replaces every color, so export your scheme first if you want to keep it."),_(guiColorPresets[index].name)),GUI_WARN_COLOR_PRESET);
+}
+
+void FurnaceGUI::applyColorPreset(int index) {
+  if (index<0 || index>=COLOR_PRESET_COUNT) return;
+  // a preset sets the colors and the base style; guru mode and shading are the user's
+  bool basic=settings.basicColors;
+  int shading=settings.guiColorsShading;
+  DivConfig c;
+  c.loadFromMemory(guiColorPresets[index].config);
+  readConfig(c,GUI_SETTINGS_COLOR);
+  settings.basicColors=basic;
+  settings.guiColorsShading=shading;
+  applyUISettings(false);
+}
+
+// WCAG 2 relative luminance
+static float colorLuminance(const ImVec4& c) {
+  float ch[3]={c.x,c.y,c.z};
+  for (float& v: ch) {
+    v=(v<=0.04045f)?(v/12.92f):powf((v+0.055f)/1.055f,2.4f);
+  }
+  return 0.2126f*ch[0]+0.7152f*ch[1]+0.0722f*ch[2];
+}
+
+// top drawn over an opaque bottom
+static ImVec4 colorOver(const ImVec4& top, const ImVec4& bottom) {
+  float a=top.w;
+  return ImVec4(top.x*a+bottom.x*(1.0f-a),top.y*a+bottom.y*(1.0f-a),top.z*a+bottom.z*(1.0f-a),1.0f);
+}
+
+static float contrastRatio(const ImVec4& a, const ImVec4& b) {
+  float la=colorLuminance(a);
+  float lb=colorLuminance(b);
+  if (la<lb) std::swap(la,lb);
+  return (la+0.05f)/(lb+0.05f);
+}
+
+// true when the Dark/Light choice doesn't match the window color: that choice
+// only restyles what basic mode derives from the accents
+bool FurnaceGUI::colorSchemeMismatch() {
+  ImVec4 base=uiColors[GUI_COLOR_BACKGROUND];
+  base.w=1.0f;
+  bool lightWindows=colorLuminance(colorOver(uiColors[GUI_COLOR_FRAME_BACKGROUND],base))>0.5f;
+  return lightWindows!=(settings.guiColorsBase==1);
+}
+
+void FurnaceGUI::drawContrastCheck() {
+  // the pairs CONTRAST_PAIRS in tools/furnace-mcp/furnace_mcp/scheme.py checks.
+  // widget backgrounds come from the applied style, so basic mode's colors
+  // (derived from the accents) are what gets checked
+  struct ContrastPair {
+    int fg, bgName;
+    ImVec4 bg;
+  };
+  const ImGuiStyle& sty=ImGui::GetStyle();
+  ImVec4 base=uiColors[GUI_COLOR_BACKGROUND];
+  base.w=1.0f;
+  ImVec4 window=colorOver(sty.Colors[ImGuiCol_WindowBg],base);
+  ImVec4 pattern=colorOver(uiColors[GUI_COLOR_PATTERN_BG],window);
+  const ContrastPair pairs[]={
+    {GUI_COLOR_TEXT,GUI_COLOR_FRAME_BACKGROUND,window},
+    {GUI_COLOR_TEXT,GUI_COLOR_FRAME_BACKGROUND_POPUP,colorOver(sty.Colors[ImGuiCol_PopupBg],window)},
+    {GUI_COLOR_TEXT,GUI_COLOR_MENU_BAR,colorOver(sty.Colors[ImGuiCol_MenuBarBg],window)},
+    {GUI_COLOR_TEXT,GUI_COLOR_BUTTON,colorOver(sty.Colors[ImGuiCol_Button],window)},
+    {GUI_COLOR_TEXT,GUI_COLOR_WIDGET_BACKGROUND,colorOver(sty.Colors[ImGuiCol_FrameBg],window)},
+    {GUI_COLOR_TEXT,GUI_COLOR_IMGUI_HEADER,colorOver(sty.Colors[ImGuiCol_Header],window)},
+    {GUI_COLOR_TEXT,GUI_COLOR_TAB_ACTIVE,colorOver(sty.Colors[ImGuiCol_TabSelected],window)},
+    {GUI_COLOR_TEXT,GUI_COLOR_TITLE_BACKGROUND_ACTIVE,colorOver(sty.Colors[ImGuiCol_TitleBgActive],base)},
+    {GUI_COLOR_TEXT,GUI_COLOR_TABLE_HEADER,colorOver(sty.Colors[ImGuiCol_TableHeaderBg],window)},
+    {GUI_COLOR_ORDER_ROW_INDEX,GUI_COLOR_FRAME_BACKGROUND,window},
+    {GUI_COLOR_PATTERN_ROW_INDEX,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_CURSOR,colorOver(uiColors[GUI_COLOR_PATTERN_CURSOR],pattern)},
+    {GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_VOLUME_HALF,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_INVALID,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_PITCH,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_VOLUME,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_PANNING,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_SONG,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_TIME,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_SPEED,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,GUI_COLOR_PATTERN_BG,pattern},
+    {GUI_COLOR_PATTERN_EFFECT_MISC,GUI_COLOR_PATTERN_BG,pattern},
+  };
+  const int total=sizeof(pairs)/sizeof(pairs[0]);
+
+  int low=0;
+  for (const ContrastPair& i: pairs) {
+    if (contrastRatio(colorOver(uiColors[i.fg],i.bg),i.bg)<4.5f) low++;
+  }
+  if (low==0) {
+    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1)."),total);
+    return;
+  }
+  ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) and may be hard to read:"),low,total);
+  ImDrawList* dl=ImGui::GetWindowDrawList();
+  ImGui::Indent();
+  for (const ContrastPair& i: pairs) {
+    ImVec4 fg=colorOver(uiColors[i.fg],i.bg);
+    float ratio=contrastRatio(fg,i.bg);
+    if (ratio>=4.5f) continue;
+    // a sample of the text on its background, then which colors they are
+    String sample=fmt::sprintf("Aa %.1f:1",ratio);
+    ImVec2 pos=ImGui::GetCursorScreenPos();
+    ImVec2 size(ImGui::CalcTextSize("Aa 00.0:1").x+sty.FramePadding.x*2.0f,ImGui::GetFrameHeight());
+    dl->AddRectFilled(pos,ImVec2(pos.x+size.x,pos.y+size.y),ImGui::GetColorU32(i.bg));
+    dl->AddText(ImVec2(pos.x+sty.FramePadding.x,pos.y+sty.FramePadding.y),ImGui::GetColorU32(fg),sample.c_str());
+    ImGui::Dummy(size);
+    ImGui::SameLine();
+    ImGui::AlignTextToFramePadding();
+    ImGui::Text(_("%s on %s"),_(guiColors[i.fg].friendlyName),_(guiColors[i.bgName].friendlyName));
+  }
+  ImGui::Unindent();
 }
 
 void FurnaceGUI::resetKeybinds() {

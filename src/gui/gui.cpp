@@ -3618,6 +3618,15 @@ void FurnaceGUI::showWarning(String what, FurnaceGUIWarnings type) {
         {tNo,kNo,[]{}},
       };
       break;
+    case GUI_WARN_COLOR_PRESET:
+      warnChoices={
+        {tYes,kYes,[this]{
+          applyColorPreset(colorPresetToLoad);
+          settingsChanged=true;
+        }},
+        {tNo,kNo,[]{}},
+      };
+      break;
     case GUI_WARN_CLOSE_SETTINGS:
       warnChoices={
         {tYes,kYes,[this]{

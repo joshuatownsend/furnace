@@ -22,6 +22,7 @@
 #include "IconsFontAwesome4.h"
 #include "../gui.h"
 #include "../guiConst.h"
+#include "../colorPresets.h"
 #include "../util.h"
 #include "../intConst.h"
 
@@ -2451,6 +2452,17 @@ void FurnaceGUI::initSettings() {
   }
   CATEGORY_END
   CATEGORY_BEGIN(_N("Color")) {
+    SettingEntry(_N("Color scheme presets"),NULL,[this]{
+      ImGui::AlignTextToFramePadding();
+      ImGui::Text(_("Presets:"));
+      for (int i=0; i<(int)(sizeof(guiColorPresets)/sizeof(guiColorPresets[0])); i++) {
+        ImGui::SameLine();
+        if (ImGui::Button(fmt::sprintf("%s##colPreset%d",_(guiColorPresets[i].name),i).c_str())) {
+          askColorPreset(i);
+        }
+      }
+      return false;
+    }),
     SettingEntry(_N("Color scheme Import/Export/Reset defaults"),NULL,[this]{
       ImGui::AlignTextToFramePadding();
       ImGui::Text(_("Color scheme:"));
@@ -2469,6 +2481,10 @@ void FurnaceGUI::initSettings() {
       return false;
     }),
     SETTING_INV_CHECKBOX(_N("Guru mode"),basicColors),
+    SettingEntry(_N("Contrast check"),NULL,[this]{
+      drawContrastCheck();
+      return false;
+    }),
   },{
     SUBCATEGORY(_N("Interface"),{
       SettingEntry::SliderInt(
@@ -2485,6 +2501,20 @@ void FurnaceGUI::initSettings() {
           {_N("Light##gcb1"),1}
         }
       ).Callback([this]{applyUISettings(false);}) BASIC_MODE,
+      SettingEntry(_N("Color scheme type hint"),NULL,[this]{
+        int preset=settings.guiColorsBase?1:0;
+        ImGui::Indent();
+        if (preset) {
+          ImGui::TextWrapped(_("Light only restyles buttons, tabs and headers. Windows and text keep the scheme's dark colors."));
+        } else {
+          ImGui::TextWrapped(_("Dark only restyles buttons, tabs and headers. Windows and text keep the scheme's light colors."));
+        }
+        if (ImGui::Button(fmt::sprintf(_("Load the %s preset##colTypeHint"),_(guiColorPresets[preset].name)).c_str())) {
+          askColorPreset(preset);
+        }
+        ImGui::Unindent();
+        return false;
+      },[this]{return settings.basicColors && colorSchemeMismatch();}),
       SETTING_COLOR(GUI_COLOR_ACCENT_PRIMARY) BASIC_MODE,
       SETTING_COLOR(GUI_COLOR_ACCENT_SECONDARY) BASIC_MODE,
 #define GURU_MODE .Condition([this]{return !settings.basicColors;})

@@ -126,6 +126,23 @@ def _span_pixels(lo, hi):
     return rows, cols
 
 
+def scope_signal(x, block=1024):
+    """One trace from a channel's outputs (samples x outputs). Mostly the mid (the
+    average), which follows a channel panned anywhere, even if it moves; where the
+    side (half the difference) is stronger, the side, so outputs in antiphase
+    (SNES and SID3 can invert one) don't cancel out."""
+    if x.shape[1] == 1:
+        return x[:, 0].copy()
+    mid = x.mean(axis=1)
+    side = (x[:, 0] - x[:, 1]) / 2
+    n = len(mid)
+    starts = np.arange(0, n, block)
+    use_side = np.add.reduceat(side * side, starts) > np.add.reduceat(mid * mid, starts)
+    mask = np.repeat(use_side, np.diff(np.r_[starts, n]))
+    mid[mask] = side[mask]
+    return mid
+
+
 class Scope:
     def __init__(self, label, samples, color):
         self.label = label
@@ -173,9 +190,7 @@ def _channel_scopes(song, files, colors, color_mode, sub_index, chans):
     for ch, path in files:
         cd = data[ch] if ch < len(data) else {}
         x, rate = read_wav(path)
-        # the loudest output, not the average: outputs in antiphase (SNES and
-        # SID3 can invert one side) would cancel out
-        mono = x[:, int(np.argmax(np.square(x).sum(axis=0)))].copy()
+        mono = scope_signal(x)
         if np.ptp(mono) < SILENT:
             continue  # silent, or a constant offset (nothing to draw)
         if color_mode == "channel":

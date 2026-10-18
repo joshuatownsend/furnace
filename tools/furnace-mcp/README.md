@@ -57,7 +57,7 @@ uv run python -m furnace_mcp.video song.fur clip.mp4 --orders 2-5 --color channe
 It renders the mix and each channel separately with the Furnace CLI, draws one scope per channel, and encodes an H.264 + AAC mp4 (1920x1080, 60 fps by default, the format YouTube expects). It needs [ffmpeg](https://ffmpeg.org) on `PATH` (`winget install Gyan.FFmpeg` on Windows). Details:
 
 - Each scope waits for a rising edge, as Furnace's Channel Oscilloscope does, so a steady note holds still on screen. Each channel is scaled to its own peak in the range, so quiet channels still show.
-- Channels that make no sound in the range are left out, and so are channels you hid from the Channel Oscilloscope in Furnace. A channel's custom name is its label.
+- Channels that make no sound in the range are left out, and so are channels you hid from the Channel Oscilloscope in Furnace. Labels are the channel names Furnace shows ("FM 1", "Square 2", or your custom name); an extended FM channel's four operators make one scope.
 - Colors come from your Furnace color scheme (`furnace.cfg`), or from a scheme file exported in Settings > Color (`--scheme`). `--color channel` uses each channel's custom color, else one color per chip.
 - `--orders` takes hex order numbers, as in the order list. Rendering every channel takes time (about 4 minutes for a 2.5-minute Genesis song), so try a few orders first. Channels render in parallel through the CLI's `-exportchans` flag, so rebuild Furnace if it says that flag is unknown.
 

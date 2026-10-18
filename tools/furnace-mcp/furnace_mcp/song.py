@@ -75,6 +75,25 @@ def info(path, subsong=None):
     return run([*args, path]).strip()
 
 
+EXT_OPERATOR = 5  # DivChanType of an extended FM channel's operators
+_CHANNEL_LINE = re.compile(r"^- (\d+): (.*) \[type (\d+)\]$")
+
+
+def channels(song):
+    """[(name, type)] per channel, as Furnace names them (custom names included),
+    with each one's DivChanType. From the CHANNELS section of furnace -info."""
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "song.json"
+        src.write_text(json.dumps(song), encoding="utf-8")
+        text = run(["-info", src])
+    out = []
+    for line in text[text.index("\nCHANNELS\n"):].splitlines():
+        m = _CHANNEL_LINE.match(line)
+        if m:
+            out.append((m.group(2), int(m.group(3))))
+    return out
+
+
 def load(path):
     """Load any song furnace can open, as the JSON dict -jsonout produces."""
     path = Path(path)

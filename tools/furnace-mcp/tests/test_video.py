@@ -54,6 +54,15 @@ def test_wave_span_stays_inside_the_panel():
     assert hi[25] - lo[25] > 30  # the step joins top to bottom
 
 
+def test_extended_operators_export_once():
+    ext = video.fsong.EXT_OPERATOR
+    types = [0, 0, ext, ext, ext, ext, 0, 1]
+    assert video._export_units({"subsongs": [{}]}, 0, types) == [0, 1, 2, 6, 7]
+    # a hidden channel is left out; any shown operator keeps its extended channel
+    hidden = {"subsongs": [{"channelData": [{"show": {"chanOsc": False}}, {}, {"show": {"chanOsc": False}}]}]}
+    assert video._export_units(hidden, 0, types) == [1, 2, 6, 7]
+
+
 def test_bad_options_fail_before_rendering():
     with pytest.raises(ValueError, match="color_mode"):
         video.make_video({}, "x.mp4", color_mode="rainbow")

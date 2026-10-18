@@ -44,8 +44,9 @@ def test_gui_checks_the_same_pairs():
     assert widgets == [(fg, bgs[0][0]) for fg, bgs in scheme.CONTRAST_PAIRS[:10]]
     assert table("patternRowOverlays[]={") == scheme._ROW_OVERLAYS
     assert table("patternCellOverlays[]={") == scheme._CELL_OVERLAYS
+    assert table("rowText[]={") == scheme._ROW_TEXT
     assert table("patternText[]={") == scheme._PATTERN_TEXT
-    assert scheme.CONTRAST_PAIRS[10:] == ([("GUI_COLOR_PATTERN_ROW_INDEX", scheme._ROW_BGS)]
+    assert scheme.CONTRAST_PAIRS[10:] == ([(k, scheme._ROW_BGS) for k in scheme._ROW_TEXT]
                                           + [(k, scheme._CELL_BGS) for k in scheme._PATTERN_TEXT])
 
 
@@ -57,11 +58,11 @@ def test_contrast_check_flags_unreadable_text():
 
 
 def test_dark_defaults_fail_under_the_hovered_cursor():
-    # upstream's own defaults: ten pattern colors are below AA, worst of all on
+    # upstream's own defaults: eleven pattern colors are below AA, worst of all on
     # the light blue hovered cursor
     low = [(fg[18:], bg[18:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
     assert low == [
-        ("INS", "CURSOR_HOVER", 2.69), ("VOLUME_MAX", "CURSOR_HOVER", 4.37),
+        ("INS", "CURSOR_HOVER", 2.69), ("INS_ERROR", "CURSOR_HOVER", 1.55), ("VOLUME_MAX", "CURSOR_HOVER", 4.37),
         ("VOLUME_HALF", "CURSOR_HOVER", 2.42), ("EFFECT_INVALID", "CURSOR_HOVER", 1.5),
         ("EFFECT_VOLUME", "CURSOR_HOVER", 4.37), ("EFFECT_SONG", "CURSOR_HOVER", 1.5),
         ("EFFECT_TIME", "CURSOR_HOVER", 1.04), ("EFFECT_SPEED", "CURSOR_HOVER", 1.91),

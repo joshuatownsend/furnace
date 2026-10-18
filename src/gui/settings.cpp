@@ -585,8 +585,15 @@ void FurnaceGUI::drawContrastCheck() {
     GUI_COLOR_PATTERN_SELECTION,GUI_COLOR_PATTERN_SELECTION_HOVER,
     GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_CURSOR_HOVER
   };
+  // row numbers sit on rows only; the inactive (dimmed placeholder) colors are
+  // left out on purpose
+  const int rowText[]={
+    GUI_COLOR_PATTERN_ROW_INDEX,GUI_COLOR_PATTERN_ROW_INDEX_HI1,GUI_COLOR_PATTERN_ROW_INDEX_HI2
+  };
   const int patternText[]={
-    GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_VOLUME_HALF,
+    GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_ACTIVE_HI1,GUI_COLOR_PATTERN_ACTIVE_HI2,
+    GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_INS_WARN,GUI_COLOR_PATTERN_INS_ERROR,
+    GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_VOLUME_HALF,
     GUI_COLOR_PATTERN_EFFECT_INVALID,GUI_COLOR_PATTERN_EFFECT_PITCH,GUI_COLOR_PATTERN_EFFECT_VOLUME,
     GUI_COLOR_PATTERN_EFFECT_PANNING,GUI_COLOR_PATTERN_EFFECT_SONG,GUI_COLOR_PATTERN_EFFECT_TIME,
     GUI_COLOR_PATTERN_EFFECT_SPEED,GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,
@@ -596,7 +603,7 @@ void FurnaceGUI::drawContrastCheck() {
   for (int i: patternRowOverlays) rowBgs.push_back({i,colorOver(uiColors[i],pattern)});
   std::vector<ContrastBg> cellBgs=rowBgs;
   for (int i: patternCellOverlays) cellBgs.push_back({i,colorOver(uiColors[i],pattern)});
-  pairs.push_back({GUI_COLOR_PATTERN_ROW_INDEX,rowBgs});
+  for (int i: rowText) pairs.push_back({i,rowBgs});
   for (int i: patternText) pairs.push_back({i,cellBgs});
 
   struct LowContrast {

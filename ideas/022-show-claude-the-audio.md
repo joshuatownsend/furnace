@@ -137,6 +137,13 @@ Josh accepted the token cost, so items 2-4 were built after the spike:
 - **`detect_sample_pitch(image=True)`:** the sample with the measured part shaded and the loop points marked, plus the loop seam close up (the end of the loop joined to its start, as it plays).
 - **`export_video(preview=True)`:** 8 real frames from the video renderer, tiled by ffmpeg with grey borders between frames. It skips drawing and encoding the rest.
 
+A hands-on tour of all four (#15) led to five fixes:
+
+- Video preview frames are offset, so they no longer all land on the same beat.
+- Close-ups are numbered and labelled by duration, so an arp macro no longer makes "4 cycles" wrong.
+- `detect_sample_pitch` reports clipping in its text. The picture marks exactly the samples the text counts.
+- Exports name a missing output folder instead of failing with a raw ffmpeg error.
+
 Images stay opt-in on every tool. The first live call through the reconnected server, `render(image=True)` on *Neon Midway*, came back as text plus a picture I could read.
 
 ## Kickoff prompt

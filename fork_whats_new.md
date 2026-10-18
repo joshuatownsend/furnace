@@ -1,6 +1,6 @@
 # What's new in this fork
 
-This is Josh Townsend's personal fork of [Furnace](https://github.com/tildearrow/furnace). It adds composing and tuning with Claude, new chips, and tools for sharing songs. Everything below was merged between 2026-10-16 and 2026-10-18 (PRs #1 to #14). The plans and test write-ups behind each feature are in [`ideas/`](ideas/README.md).
+This is Josh Townsend's personal fork of [Furnace](https://github.com/tildearrow/furnace). It adds composing and tuning with Claude, new chips, and tools for sharing songs. Everything below was merged between 2026-10-16 and 2026-10-18 (PRs #1 to #15). The plans and test write-ups behind each feature are in [`ideas/`](ideas/README.md).
 
 ## At a glance
 
@@ -14,7 +14,7 @@ This is Josh Townsend's personal fork of [Furnace](https://github.com/tildearrow
 | New chip | Bally Astrocade, with an example song | #6, #7 |
 | Sample tuning | Claude measures a sample's pitch and tunes it | #12 |
 | Wave editor | A Harmonics tab that shows what a wave is made of | #13 |
-| Pictures for Claude | Waveforms, spectrograms and video previews Claude can look at | #14 |
+| Pictures for Claude | Waveforms, spectrograms and video previews Claude can look at | #14, #15 |
 
 ---
 
@@ -77,7 +77,7 @@ An MCP server in [`tools/furnace-mcp`](tools/furnace-mcp/README.md) lets Claude 
 
 ### Pictures for Claude
 
-*Show Claude the audio* (#14)
+*Show Claude the audio* (#14, #15)
 
 Four tools can now return a picture with their text report, so Claude can see the sound as well as read numbers about it:
 

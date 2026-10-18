@@ -216,7 +216,16 @@ def draw(mix_wav, channels, starts, out_png, *, first_order=0, width=1200,
         t += step
     texts.append((6, 4, "order", 12, _DIM_TEXT))
 
+    out_png = _write(exe, img, texts, out_png)
+    return {"path": out_png, "drawn": [label for label, _ in waves],
+            "silent": [label for label, _ in silent]}
+
+
+def _write(exe, img, texts, out_png):
+    """Label img with texts [(x, y, text, size, color)] in Furnace's font and write
+    it as a PNG through ffmpeg. Returns the path."""
     out_png = Path(out_png)
+    height, width = img.shape[:2]
     with tempfile.TemporaryDirectory() as td:
         td = Path(td)
         vf = []
@@ -231,8 +240,138 @@ def draw(mix_wav, channels, starts, out_png, *, first_order=0, width=1200,
         if vf:
             cmd += ["-vf", ",".join(vf)]
         cmd += ["-frames:v", "1", str(out_png.resolve())]
-        p = subprocess.run(cmd, input=img.tobytes(), capture_output=True, cwd=td)
+        p = subprocess.run(cmd, input=np.ascontiguousarray(img).tobytes(), capture_output=True, cwd=td)
         if p.returncode != 0:
             raise fsong.FurnaceError("ffmpeg failed: " + p.stderr.decode("utf-8", "replace").strip()[-2000:])
-    return {"path": out_png, "drawn": [label for label, _ in waves],
-            "silent": [label for label, _ in silent]}
+    return out_png
+
+
+def _stretch(seg, w):
+    """A few cycles resampled to w * 4 points, so a close-up draws as a line."""
+    return np.stack([np.interp(np.linspace(0, len(seg) - 1, w * 4), np.arange(len(seg)), seg[:, c])
+                     for c in range(seg.shape[1])], axis=1)
+
+
+def _mark(img, texts, x, y0, y1, label, color=_ORDER):
+    img[y0:y1, x] = color
+    if label:
+        texts.append((x + 3, y0 + 2, label, 11, _DIM_TEXT))
+
+
+def _draw_bars(img, texts, x0, y0, w, h, groups, floor=-40.0):
+    """Harmonic bars: groups [(name, [dB vs the strongest, ...])], side by side,
+    0 dB at the top and floor at the bottom."""
+    img[y0:y0 + h, x0:x0 + w] = _PANEL
+    gw = w // max(1, len(groups))
+    for g, (name, levels) in enumerate(groups):
+        gx = x0 + g * gw
+        texts.append((gx + 6, y0 + 4, name, 12, _TEXT))
+        if not levels:
+            texts.append((gx + 6, y0 + 22, "too quiet to measure", 11, _DIM_TEXT))
+            continue
+        top, base = y0 + 36, y0 + h - 18
+        bw = (gw - 24) // len(levels)
+        for k, db in enumerate(levels):
+            y = int(base - (max(db, floor) - floor) / -floor * (base - top))
+            bx = gx + 12 + k * bw
+            img[y:base, bx + 2:bx + bw - 2] = _WAVE
+            texts.append((bx + bw // 2 - 4, base + 2, str(k + 1), 11, _DIM_TEXT))
+            texts.append((bx + 2, y - 14, f"{db:g}", 10, _DIM_TEXT))
+
+
+def draw_note(wav, on, off, f0, report, out_png, *, width=1200, ffmpeg="ffmpeg"):
+    """Picture of one previewed note: the whole note with note on and off marked,
+    close-ups of about four cycles 20 ms into the attack, 150 ms in, and just
+    before the release, then the first 8 harmonics of the attack and the held
+    part (report: analyze_note's result)."""
+    exe = find_ffmpeg(ffmpeg)
+    x, rate = read_wav(wav)
+    left, pw = 120, width - 130
+    span = max(int(4 / f0 * rate), 16)
+    shots = [("attack +20 ms", on + 0.02), ("held +150 ms", on + 0.15), ("before release", off - 0.1)]
+    whole_h, shot_h, bars_h, gap = 130, 110, 150, 8
+    height = gap + whole_h + 18 + len(shots) * (shot_h + gap) + bars_h + gap
+    img = np.empty((height + height % 2, width, 3), np.uint8)
+    img[:] = _BG
+    texts = []
+    y = gap
+    total = max(len(x), 1) / rate
+    _draw_wave(img, left, y, pw, whole_h, x, _MIX)
+    texts.append((6, y + 4, "whole note", 13, _TEXT))
+    for t, name in ((on, "note on"), (off, "note off")):
+        _mark(img, texts, left + int(t / total * (pw - 1)), y, y + whole_h, name)
+    for _, t in shots:  # red ticks: where the close-ups are taken
+        _mark(img, texts, left + int(t / total * (pw - 1)), y + whole_h - 10, y + whole_h, "", _CLIPPED)
+    step = _ticks(total, pw)
+    t = 0.0
+    while t <= total + 1e-9:
+        texts.append((left + int(t / total * (pw - 1)), y + whole_h + 2, _clock(t, step), 11, _DIM_TEXT))
+        t += step
+    y += whole_h + 18
+    for name, t in shots:
+        a = min(max(int(t * rate), 0), max(len(x) - span, 0))
+        seg = x[a:a + span]
+        peak = float(np.abs(seg).max()) if len(seg) else 0.0
+        # each close-up is scaled to fit: it is there for the wave's shape, and a
+        # quiet sustain would otherwise be a flat line
+        gain = 0.9 / peak if peak > 1e-4 else 1.0
+        _draw_wave(img, left, y, pw, shot_h, _stretch(seg * gain, pw), _WAVE)
+        texts.append((6, y + 4, name, 12, _TEXT))
+        texts.append((6, y + 20, "4 cycles", 11, _DIM_TEXT))
+        texts.append((6, y + 36, f"peak {20 * np.log10(max(peak, 1e-9)):.1f} dB", 11, _DIM_TEXT))
+        texts.append((6, y + 52, "scaled to fit", 11, _DIM_TEXT))
+        y += shot_h + gap
+    timbre = (report or {}).get("timbre") or {}
+    groups = [(f"{k} harmonics, dB", (timbre.get(k) or {}).get("harmonics_db") or [])
+              for k in ("attack", "held") if k in timbre]
+    _draw_bars(img, texts, left, y, pw, bars_h, groups or [("harmonics", [])])
+    return _write(exe, img, texts, out_png)
+
+
+def draw_sample(x, loop, span, out_png, *, width=1200, ffmpeg="ffmpeg"):
+    """Picture of a sample (floats, one channel): the whole sample with the part
+    measured shaded and the loop points marked, then a close-up of the loop seam
+    (the end of the loop joined to its start, as it plays: a jump there clicks),
+    or of the start of the measured part when there is no loop."""
+    exe = find_ffmpeg(ffmpeg)
+    x = np.asarray(x, np.float32).reshape(-1, 1)
+    n = max(len(x), 1)
+    left, pw = 120, width - 130
+    whole_h, close_h, gap = 150, 150, 8
+    img = np.empty((gap + whole_h + 18 + close_h + 18 + gap, width, 3), np.uint8)
+    img[:] = _BG
+    texts = []
+    y = gap
+    a, b = span
+    _draw_wave(img, left, y, pw, whole_h, x, _MIX)
+    xa, xb = left + int(a / n * (pw - 1)), left + int(b / n * (pw - 1))
+    shade = img[y:y + whole_h, xa:xb + 1]
+    shade[:] = (shade * 0.7 + np.array(_WAVE) * 0.3).astype(np.uint8)
+    texts.append((6, y + 4, "whole sample", 13, _TEXT))
+    texts.append((6, y + 22, "shaded: measured", 11, _DIM_TEXT))
+    if loop:
+        for pos, name, dy in ((loop[0], "loop start", 0), (loop[1], "loop end", 16)):
+            lx = left + int(min(pos, n - 1) / n * (pw - 1))
+            _mark(img, texts, lx, y, y + whole_h, "", _CLIPPED)
+            # labels go left of a line near the right edge, and the two are staggered
+            texts.append((lx + 3 if lx < left + pw - 70 else lx - 62, y + 2 + dy, name, 11, _DIM_TEXT))
+    texts.append((left, y + whole_h + 2, "0", 11, _DIM_TEXT))
+    texts.append((left + pw - 90, y + whole_h + 2, f"{len(x)} samples", 11, _DIM_TEXT))
+    y += whole_h + 18
+    k = 48
+    cut = None
+    if loop:
+        s0, s1 = loop[0], loop[1]
+        tail, head = x[max(s1 - k, s0):s1], x[s0:min(s0 + k, s1)]
+        seam, cut = np.concatenate([tail, head]), len(tail)
+        title, note = "loop seam", "end of the loop | its start, as it plays"
+    else:
+        seam = x[a:a + 2 * k]
+        title, note = "measured part", f"samples {a}-{a + len(seam)}"
+    if len(seam) >= 2:
+        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE)
+        if cut:
+            _mark(img, texts, left + int(cut / len(seam) * (pw - 1)), y, y + close_h, "", _CLIPPED)
+    texts.append((6, y + 4, title, 13, _TEXT))
+    texts.append((left, y + close_h + 2, note, 11, _DIM_TEXT))
+    return _write(exe, img, texts, out_png)

@@ -208,11 +208,15 @@ def _channel_scopes(song, files, colors, color_mode, sub_index, chans):
 
 def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
                width=1920, height=1080, fps=60, window_ms=40.0, colors=None,
-               color_mode="mono", labels=True, ffmpeg="ffmpeg", crf=18, preset="medium"):
+               color_mode="mono", labels=True, ffmpeg="ffmpeg", crf=18, preset="medium",
+               stills=0):
     """Write an mp4 (H.264 + AAC, yuv420p: what YouTube expects) with one scope per
     audible channel. colors: a scheme dict from scheme.read/defaults (default: the
     colors Furnace uses now, see scheme.current). color_mode: "mono" (OSC_WAVE for
     every channel) or "channel" (each channel's custom color, else one color per chip).
+    stills > 0 writes a PNG contact sheet instead (out should end in .png): that many
+    frames, evenly spaced, at a quarter size, 4 to a row, left to right; nothing is
+    encoded, so it takes about as long as the channel renders.
     Returns a dict describing what was made."""
     if color_mode not in ("mono", "channel"):
         raise ValueError(f"color_mode must be mono or channel, not {color_mode!r}")
@@ -266,13 +270,20 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
                 (td / f"label{i}.txt").write_text(s.label, encoding="utf-8")
                 vf.append(f"drawtext=fontfile=font.otf:textfile=label{i}.txt:expansion=none:"
                           f"fontcolor=0x{hexcol}:fontsize={max(12, h // 12)}:x={x0 + h // 24}:y={y0 + h // 24}")
+        frames = range(nframes)
         cmd = [exe, "-hide_banner", "-loglevel", "error", "-y",
-               "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}", "-r", str(fps), "-i", "-",
-               "-i", str(mix)]
-        if vf:
-            cmd += ["-vf", ",".join(vf)]
-        cmd += ["-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
+               "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{width}x{height}", "-r", str(fps), "-i", "-"]
+        if stills:
+            frames = [min(nframes - 1, int((k + 0.5) * nframes / stills)) for k in range(stills)]
+            vf += [f"scale={width // 4}:-2",
+                   f"tile=4x{-(-stills // 4)}:padding=6:margin=6:color=0x707070"]
+            cmd += ["-vf", ",".join(vf), "-frames:v", "1", str(out)]
+        else:
+            cmd += ["-i", str(mix)]
+            if vf:
+                cmd += ["-vf", ",".join(vf)]
+            cmd += ["-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE, cwd=td)
         # draw the next frame while a writer thread hands the last one to ffmpeg
         free, full = queue.Queue(), queue.Queue()
@@ -291,7 +302,7 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
 
         writer = threading.Thread(target=write, daemon=True)
         writer.start()
-        for f in range(nframes):
+        for f in frames:
             if broken.is_set():
                 break
             frame = free.get()
@@ -316,7 +327,8 @@ def make_video(song, out, *, sub_index=0, order_start=0, order_end=None,
 
     return {"path": out, "bytes": out.stat().st_size, "seconds": nsamp / rate, "frames": nframes,
             "grid": (cols, rows), "channels": [s.label for s in scopes],
-            "labels": bool(vf)}
+            "labels": labels and _FONT.is_file(),
+            "still_times": [f / fps for f in frames] if stills else []}
 
 
 def main(argv=None):

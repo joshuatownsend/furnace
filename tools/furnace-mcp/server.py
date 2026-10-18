@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -362,8 +363,8 @@ def render(order_start: int = 0, order_end: int | None = None,
 
 @_tool(_READ)
 def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
-                       hold_rows: int = 8, release_rows: int = 8, subsong: int = 0,
-                       path: str = "") -> str:
+                       hold_rows: int = 8, release_rows: int = 8, image: bool = False,
+                       subsong: int = 0, path: str = ""):
     """Play one note of an instrument on its own and return a listen report: pitch
     (Hz and cents from the note played), envelope (attack, decay, sustain, release),
     peak loudness, the first 8 harmonics in dB relative to the strongest of them, and
@@ -378,7 +379,13 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     The note is held for hold_rows (0.1 s each), then released for release_rows.
     channel -1 picks the channel that uses the instrument most in the song (pass one
     explicitly for an unused instrument; it must be a channel of the instrument's
-    chip). Doesn't change the song."""
+    chip). image adds a picture (needs ffmpeg): the whole note with note on and
+    off marked, close-ups of about four cycles in the attack, the held part and
+    just before release, and the harmonic bars. Look at the close-ups for how the
+    wave's shape changed after an edit; take exact numbers from the text.
+    Doesn't change the song."""
+    if image:
+        video.find_ffmpeg()
     p = _path(path)
     s = _load(p)
     n = notation.parse_note(note)
@@ -406,8 +413,13 @@ def preview_instrument(instrument: int, note: str = "C-4", channel: int = -1,
     label = fsong.channel_labels(s)[channel]
     head = (f"instrument {instrument:02X} {name!r}, {note} on channel {channel} ({label}), "
             f"held {off - on:g} s then released\nwav: {wav}")
-    return head + "\n" + analysis.format_note_report(analysis.analyze_note(wav, n, note_off_s=off, a4=a4,
-                                                                                note_on_s=on))
+    report = analysis.analyze_note(wav, n, note_off_s=off, a4=a4, note_on_s=on)
+    text = head + "\n" + analysis.format_note_report(report)
+    if not image:
+        return text
+    f0 = (report.get("pitch") or {}).get("hz") or analysis.note_hz(n, a4)
+    png = picture.draw_note(wav, on, off, f0, report, Path(wav).with_suffix(".png"))
+    return [text + f"\nimage: {png}", Image(path=png)]
 
 
 def _sample_pitch(s, index):
@@ -467,15 +479,21 @@ def _sample_users(s, index):
 
 
 @_tool(_READ)
-def detect_sample_pitch(sample: int, path: str = "") -> str:
+def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
     """Measure the pitch of a sample (8- or 16-bit PCM): what a written C-4 plays,
     as a note and cents, with a confidence (0-1; below 0.7, check by ear). It
     measures the loop if the sample has one (that holds the note), else the
     steady part after the attack. Noise, drums and chords report "no clear
     pitch" instead of a guess. Also says what tune_sample would set the center
-    rate to. Doesn't change the song."""
-    s = _load(_path(path))
-    _, head, det, t = _sample_pitch(s, sample)
+    rate to. image adds a picture (needs ffmpeg): the whole sample with the part
+    measured shaded and the loop points marked, and a close-up of the loop seam
+    (the end of the loop joined to its start: a jump there clicks). Doesn't
+    change the song."""
+    if image:
+        video.find_ffmpeg()
+    p = _path(path)
+    s = _load(p)
+    smp, head, det, t = _sample_pitch(s, sample)
     lines = [head]
     if t is None:
         lines.append(f"pitch: no clear pitch: {det['reason']}. Tune it by ear if it needs it.")
@@ -485,7 +503,17 @@ def detect_sample_pitch(sample: int, path: str = "") -> str:
         lines.append(f"tune_sample would set the center rate to {t['new_rate']} Hz: a written C-4 "
                      f"then plays {notation.note_name(108 + t['target_semitones'])}")
     lines.append(_sample_users(s, sample))
-    return "\n".join(lines)
+    if not image:
+        return "\n".join(lines)
+    x = fsong.sample_pcm(smp)
+    loop = fsong.sample_loop(smp)
+    _, region = analysis.sample_segment(x, loop)
+    m = re.search(r"(\d+)-(\d+)", region)  # "the loop (a-b)" or "samples a-b"
+    span = (int(m.group(1)), int(m.group(2))) if m else (0, len(x))
+    tag = hashlib.sha1(str(p).encode("utf-8")).hexdigest()[:8]
+    png = picture.draw_sample(x, loop, span, _render_dir() / f"{p.stem}_{tag}_smp{sample:02X}.png")
+    lines.append(f"image: {png}")
+    return ["\n".join(lines), Image(path=png)]
 
 
 @_tool(_EDIT)
@@ -544,7 +572,7 @@ def export(output: str, format: str = "", path: str = "") -> str:
 @_tool(_EDIT)
 def export_video(output: str, order_start: int = 0, order_end: int | None = None,
                  color: str = "mono", size: str = "1920x1080", fps: int = 60,
-                 scheme: str = "", subsong: int = 0, path: str = "") -> str:
+                 scheme: str = "", preview: bool = False, subsong: int = 0, path: str = ""):
     """Make an oscilloscope video (mp4, H.264 + AAC, ready for YouTube): one scope
     per audible channel, steadied on rising edges, with the song as the soundtrack.
     Orders order_start..order_end (inclusive; default the whole song). Slow: each
@@ -553,16 +581,27 @@ def export_video(output: str, order_start: int = 0, order_end: int | None = None
     "channel" (each channel's custom color, else one color per chip). scheme: a
     color scheme file from Settings > Color > Export (default: the colors Furnace
     uses now). Channels hidden from Furnace's Channel Oscilloscope are left out.
-    Needs ffmpeg on PATH. Writes output; does not change the song."""
+    Needs ffmpeg on PATH. Writes output; does not change the song.
+    preview: instead of the video, write and return a contact sheet of 8 frames
+    (output with .png in place of .mp4), evenly spaced, 4 to a row, read left to
+    right. It skips drawing and encoding every frame, so check the layout and
+    colors with it before the full video."""
     p = _path(path)
     out = Path(output).expanduser().resolve()
     if out.suffix.lower() != ".mp4":
         raise ValueError("output must be an .mp4 file")
     width, height = video.parse_size(size)
     colors = fscheme.read(Path(scheme).expanduser())[0] if scheme else None
+    if preview:
+        out = out.with_suffix(".png")
     r = video.make_video(_load(p), out, sub_index=subsong, order_start=order_start,
                          order_end=order_end, width=width, height=height, fps=fps,
-                         colors=colors, color_mode=color)
+                         colors=colors, color_mode=color, stills=8 if preview else 0)
+    if preview:
+        times = ", ".join(f"{int(t) // 60}:{t % 60:04.1f}" for t in r["still_times"])
+        return [f"wrote preview {r['path']}: 8 frames of {r['seconds']:.1f} s, at {times} "
+                f"(left to right, top row first)\nchannels: {', '.join(r['channels'])}",
+                Image(path=r["path"])]
     return (f"wrote {r['path']} ({r['bytes']} bytes, {r['seconds']:.1f} s at {fps} fps, "
             f"{r['grid'][0]}x{r['grid'][1]} grid)\nchannels: {', '.join(r['channels'])}"
             + ("" if r["labels"] else "\nno channel labels: Furnace's UI font (res/fonts) is missing"))

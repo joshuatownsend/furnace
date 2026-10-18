@@ -433,7 +433,7 @@ def _harmonics(mag, binhz, f0, rate, n):
     out = []
     for k in range(1, kmax + 1):
         half = min(max(min(0.02 * k * f0, f0 / 6), lobe), f0 / 2) / binhz
-        lo, hi = max(int(k * f0 / binhz - half), 1), min(int(k * f0 / binhz + half) + 1, len(mag) - 1)
+        lo, hi = max(int(k * f0 / binhz - half), 1), min(int(k * f0 / binhz + half) + 1, len(mag))
         if hi - lo < 3:
             continue
         fresh = ~mask[lo:hi]
@@ -446,7 +446,7 @@ def _harmonics(mag, binhz, f0, rate, n):
             hz = (i + (0.5 * (a - c) / den if den else 0.0)) * binhz
         out.append((k, float(power[lo:hi][fresh].sum()), hz, float(mag[i])))
     lo_all = max(int(f0 * 0.5 / binhz), 1)
-    hi_all = min(int((kmax + 0.5) * f0 / binhz), len(mag) - 1)
+    hi_all = min(int((kmax + 0.5) * f0 / binhz), len(mag))  # Nyquist bin included
     return out, float(power[lo_all:hi_all].sum())
 
 
@@ -462,7 +462,8 @@ def detect_pitch(x, rate, fmin=20.0, fmax=5000.0):
     x = x - x.mean() if len(x) else x
     if len(x) < 64 or np.sqrt(np.mean(x ** 2)) < 1e-4:
         return {"hz": None, "reason": "silent or too short"}
-    fmax = min(fmax, rate / 4)
+    # search down to a 2-sample period: short chip loops can be 2 or 3 samples
+    fmax = min(fmax, rate / 2)
     tmin = max(2, int(rate / fmax))
     tmax = min(int(rate / fmin), len(x) // 2)
     if tmax <= tmin + 2:
@@ -486,6 +487,17 @@ def detect_pitch(x, rate, fmin=20.0, fmax=5000.0):
     f0 = rate / (tau + (0.5 * (a - c) / den if den else 0.0))
     seg = x[:SEGMENT_MAX]
     mag, binhz = _spectrum(seg, rate, pad=4 if len(seg) > 16384 else 8)
+    if tau < 16:
+        # at a period of a few samples YIN's interpolation is coarse (a 3-sample
+        # cycle reads 2% sharp): take the spectral peak near it instead
+        lo, hi = int(f0 * 0.94 / binhz), min(int(f0 * 1.06 / binhz) + 2, len(mag))
+        i = lo + int(np.argmax(mag[lo:hi]))
+        if 0 < i < len(mag) - 1:
+            pa, pb, pc = (np.log(mag[j] + 1e-12) for j in (i - 1, i, i + 1))
+            den = pa - 2 * pb + pc
+            f0 = (i + (0.5 * (pa - pc) / den if den else 0.0)) * binhz
+        else:
+            f0 = i * binhz
     harm, total = _harmonics(mag, binhz, f0, rate, len(seg))
     # a period of two cycles (a short period isn't a whole number of samples, so
     # YIN's dip there can miss the threshold): then the odd harmonics are empty

@@ -629,6 +629,18 @@ def nominal_center_rate(song):
 
 
 def sample_instruments(song, index):
-    """Instruments whose initial sample is this one."""
-    return [i for i, ins in enumerate(song.get("instruments") or [])
-            if (ins.get("amiga") or {}).get("initSample") == index]
+    """Instruments that play this sample: sample instruments, or synth
+    instruments with "use sample" on, through their initial sample or, with a
+    note map, any mapped entry (DivInstrumentAmiga::getSample)."""
+    out = []
+    for i, ins in enumerate(song.get("instruments") or []):
+        amiga = ins.get("amiga") or {}
+        if ins.get("type", 0) not in SAMPLE_INS_TYPES and not amiga.get("useSample"):
+            continue
+        if amiga.get("useNoteMap"):
+            used = {m.get("map") for m in amiga.get("sampleMap") or []}
+        else:
+            used = {amiga.get("initSample")}
+        if index in used:
+            out.append(i)
+    return out

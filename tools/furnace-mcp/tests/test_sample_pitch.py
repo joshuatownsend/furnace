@@ -120,3 +120,25 @@ def test_sample_pcm_depths():
     assert list(x) == [0, 0.5, -1]
     with pytest.raises(ValueError, match="depth 9 \\(BRR\\)"):
         fsong.sample_pcm({"depth": 9, "data": [0] * 9})
+
+
+@pytest.mark.parametrize("period", [2, 3, 5])
+def test_very_short_periods(period):
+    # chip loops of 2 or 3 samples must not read an octave low
+    cycle = {2: [0.8, -0.8], 3: [0.8, -0.4, -0.4], 5: [0.8, 0.3, -0.5, -0.5, -0.1]}[period]
+    x = np.tile(cycle, 4000 // period)
+    r = analysis.detect_pitch(x, 8000)
+    assert r["hz"] is not None, r
+    assert abs(1200 * np.log2(r["hz"] / (8000 / period))) < 10
+
+
+def test_sample_instruments_follow_the_sample_mode():
+    mapped = {"type": 4, "amiga": {"initSample": 0, "useNoteMap": True,
+                                   "sampleMap": [{"freq": 0, "map": 2}] * 90 + [{"freq": 0, "map": 3}] * 90}}
+    plain = {"type": 4, "amiga": {"initSample": 2}}
+    synth_off = {"type": 1, "amiga": {"initSample": 2, "useSample": False}}  # an FM instrument
+    synth_on = {"type": 5, "amiga": {"initSample": 2, "useSample": True}}
+    song = {"instruments": [mapped, plain, synth_off, synth_on]}
+    assert fsong.sample_instruments(song, 2) == [0, 1, 3]
+    assert fsong.sample_instruments(song, 3) == [0]
+    assert fsong.sample_instruments(song, 0) == []  # the note map replaces initSample

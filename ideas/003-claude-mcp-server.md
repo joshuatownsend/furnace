@@ -74,7 +74,20 @@ Edits are made in place on the song file, after a one-time `.bak` copy per sessi
 The prototype is in `tools/furnace-mcp/` and registered for Claude Code in `.mcp.json`. All eight tools work over stdio. There are 26 tests: notation units, plus end-to-end tests through the MCP protocol against the real binary.
 
 - **Speed (step 2)**: `inspect_song` 0.6 s. `read_patterns` under 0.1 s (cached). `write_rows` 0.4 s. `render` of one order (4–5 s of audio) 1.2 s; with `per_channel`, about 8 s for 13 channels.
-- **Pitch check**: on the YM2612, C-4 = 261 Hz and A-4 = 439 Hz, which confirms the note numbering end to end. On this song's SN76489, A-4 rendered at 1748 Hz, two octaves up, probably a chip clock or song setting. The listen report's `strongest_hz` is how Claude catches this kind of surprise, and it should check after writing a part on a chip it hasn't used yet.
+- **Pitch check**: on the YM2612, C-4 = 261 Hz and A-4 = 439 Hz, which confirms the note numbering end to end. On this song's SN76489, A-4 rendered at 1748 Hz, two octaves up. The listen report's `strongest_hz` is how Claude catches this kind of surprise, and it should check after writing a part on a chip it hasn't used yet.
+- **The PSG octave, explained (2026-10-17)**: it isn't the song, the instrument or a bug. A written note sounds at a different octave on each chip:
+
+  | Chip | A-4 sounds at | Offset |
+  |---|---|---|
+  | YM2612 | 439 Hz | none |
+  | SN76489 | 1748 Hz | +2 octaves |
+  | NES pulse | 881 Hz | +1 octave |
+  | PC Engine | 881 Hz | +1 octave |
+  | AY-3-8910 | 424 Hz | none (that demo is tuned to A = 424 Hz) |
+
+  These were measured with a macro-free instrument at default chip settings. The sound has its fundamental and odd harmonics at those frequencies, so the tracker isn't latching onto a harmonic. Non-linear pitch gives the same result.
+
+  The official 0.6.8.2 release gives the same pitches: per-channel renders of the unmodified Genesis, SN76489 and AY demos match this build at a ratio of 1.00. So it isn't caused by upstream's new pitch table (April 2026) or by the fork. The convention follows the trackers Furnace imports from: the FamiTracker importer maps octaves one to one, and the DefleMask importer shifts SMS octaves. Composers write by ear and compensate; this demo's PSG parts sit in octaves 2–3 under FM leads in 4–5. For Claude it's a trap: a written note doesn't give the pitch you hear. Josh chose to have `inspect_song` measure and report each chip's offset (branch `idea/003-octave-probe`).
 - **Per-channel renders can skip channels**: the extended-channel-3 operator channels (3–5 here) don't render separately. The report lists them as "not rendered separately".
 - **Tuning (step 5, first pass)**: "make 0C 'Slap' brighter" by lowering the modulator TL (alg 3, op 4 is the only carrier) moved the spectral centroid from 145 Hz to 341 Hz (−6) to 783 Hz (−12). Text feedback does track the change in the expected direction. Whether the result sounds good is still Josh's call (open question 4).
 - **First real session (Josh, 2026-10-16)**: Josh opened a song in Furnace and asked for "horns/trumpet blasting a victory type tune". Claude made a new song instead, because the server couldn't see what Furnace had open. Fixed with **open-song sync**, chosen by Josh over "just name the file" and the parked live link. It's a small fork-only change in `src/gui/gui.cpp`: the GUI publishes the open file's path, unsaved state and a reload count to `<config>/open-song.txt`, and reloads the file when it changes on disk, asking first if there are unsaved edits. Tool paths now default to the open song, and edits are refused while Furnace has unsaved changes. Measured live: about 2 s from an edit to the reloaded song on screen.
@@ -83,7 +96,10 @@ The prototype is in `tools/furnace-mcp/` and registered for Claude Code in `.mcp
 - **Furnace drops unused patterns on save** (`saveUnusedPatterns` defaults off), so rows written to a pattern no order plays disappeared. `write_rows` now requires the pattern to be placed with `set_order` first, and the server re-reads the file after each save so its view matches the disk.
 - **FM operator order**: the JSON stores 4-op FM operators in register order (S1, S3, S2, S4). The first session hit this while tuning a trumpet patch, and it's now in the instrument tools' descriptions.
 - **Codex review hardening (PR #3, 2026-10-17)**: four review rounds tightened open-song sync. Each Furnace process now writes its own `<config>/open-song-<pid>.txt`, written atomically and only marked as published once written. The server ignores files from crashed processes and picks the window focused last. Recovery backups aren't offered for editing. Edits are refused if the file changed since it was read. The watch re-baselines right after Furnace saves, and reloads return to the sub-song you were on. On the server side: the macOS config dir and Unix build paths, saves staged next to the song, partial FM operator updates that keep the other operators, and a fresh `.bak` per session.
-- **Follow-up (not done)**: the GUI's file watch and the server's stale-read check both compare modification time (plus size, in the GUI). On filesystems with coarse timestamps (FAT/exFAT, some network shares), two saves within one timestamp tick that keep the same size can go unnoticed. A content hash or a change counter would close this.
+- **Follow-up (done 2026-10-17)**: the GUI's file watch and the server's stale-read check both compared modification time (plus size, in the GUI). On filesystems with coarse timestamps (FAT/exFAT, some network shares), two saves within one timestamp tick that keep the same size went unnoticed. Both now compare contents.
+  - **Server**: the revision is a SHA-256 of the file. It decides both the stale-save refusal and the read cache, which used to serve the old song in this case. A touch with no content change is no longer a change.
+  - **GUI**: the watch hashes the file on each 500 ms poll (FNV-1a, files up to 8 MB; larger ones fall back to the stamp). The baseline comes from the bytes it loaded or wrote, not from a re-read. On Windows it opens the file with delete sharing, so the server's atomic replace can't fail on the GUI's read.
+  - **Tests**: three server tests (same-size, same-time rewrite refused on save; seen on load; touch alone isn't a change) fail on the old code and pass on the new.
 - **Josh's check (steps 1 and 5, 2026-10-17)**: done on the reviewed build. Josh is satisfied with the result.
 - ~~**Still needs Josh (steps 1 and 5)**~~: open a copy of a song in Claude Code with this server, ask for a part ("add a bass line under order 00–03", "make the lead brighter"), open the result in Furnace and judge it.
 

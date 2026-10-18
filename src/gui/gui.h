@@ -1836,6 +1836,8 @@ class FurnaceGUI {
   bool publishedModified=false;
   String watchedFileName;
   int64_t watchedStamp=-1;
+  uint64_t watchedHash=0;
+  bool watchedHashed=false;
   unsigned int lastFileWatch=0;
   bool vgmExportDirectStream, displayInsTypeList, displayWaveSizeList;
   bool portrait, injectBackUp, mobileMenuOpen, warnColorPushed;

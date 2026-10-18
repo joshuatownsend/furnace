@@ -822,6 +822,78 @@ static int64_t songFileStamp(const String& path) {
   return t*31+size;
 }
 
+// FNV-1a over the song file's bytes. the stamp alone misses a same-size save
+// within one timestamp tick (FAT/exFAT and some network shares are that coarse)
+#define SONG_HASH_INIT 0xcbf29ce484222325ULL
+#define SONG_HASH_MAX_SIZE (8*1024*1024)
+
+static uint64_t songHashUpdate(uint64_t h, const unsigned char* buf, size_t len) {
+  for (size_t i=0; i<len; i++) {
+    h^=buf[i];
+    h*=0x100000001b3ULL;
+  }
+  return h;
+}
+
+// false if the file can't be read or is too large to hash every poll (checked
+// before reading; the loop cap catches a file growing mid-read); the stamp is
+// the only check then
+static bool songFileHash(const String& path, uint64_t& hash) {
+  unsigned char buf[65536];
+  uint64_t h=SONG_HASH_INIT;
+  size_t total=0;
+  bool ok=true;
+#ifdef _WIN32
+  // share delete too, so another program's atomic replace of the song doesn't
+  // fail while we're reading it
+  HANDLE f=CreateFileW(utf8To16(path.c_str()).c_str(),GENERIC_READ,FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE,NULL,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,NULL);
+  if (f==INVALID_HANDLE_VALUE) return false;
+  // size first, so an oversized song costs nothing per poll
+  LARGE_INTEGER fileSize;
+  if (!GetFileSizeEx(f,&fileSize) || fileSize.QuadPart>SONG_HASH_MAX_SIZE) {
+    CloseHandle(f);
+    return false;
+  }
+  DWORD got=0;
+  while (true) {
+    if (!ReadFile(f,buf,sizeof(buf),&got,NULL)) {
+      ok=false;
+      break;
+    }
+    if (got==0) break;
+    total+=got;
+    if (total>SONG_HASH_MAX_SIZE) {
+      ok=false;
+      break;
+    }
+    h=songHashUpdate(h,buf,got);
+  }
+  CloseHandle(f);
+#else
+  FILE* f=ps_fopen(path.c_str(),"rb");
+  if (f==NULL) return false;
+  struct stat fileStat;
+  if (fstat(fileno(f),&fileStat)!=0 || fileStat.st_size>SONG_HASH_MAX_SIZE) {
+    fclose(f);
+    return false;
+  }
+  size_t got;
+  while ((got=fread(buf,1,sizeof(buf),f))>0) {
+    total+=got;
+    if (total>SONG_HASH_MAX_SIZE) {
+      ok=false;
+      break;
+    }
+    h=songHashUpdate(h,buf,got);
+  }
+  if (ferror(f)) ok=false;
+  fclose(f);
+#endif
+  if (!ok) return false;
+  hash=h;
+  return true;
+}
+
 void FurnaceGUI::syncOpenSong() {
   if (curFileName!=publishedFileName || modified!=publishedModified || openSongReloads!=publishedReloads) {
     // written to a temporary file and renamed, so a reader never sees a
@@ -869,10 +941,25 @@ void FurnaceGUI::syncOpenSong() {
   if (curFileName!=watchedFileName) {
     watchedFileName=curFileName;
     watchedStamp=stamp;
+    watchedHashed=songFileHash(curFileName,watchedHash);
     return;
   }
-  if (stamp==-1 || stamp==watchedStamp) return;
+  if (stamp==-1) return;
+  uint64_t hash=0;
+  bool hashed=songFileHash(curFileName,hash);
+  if (hashed && watchedHashed) {
+    // the contents decide: a touch isn't a change, and a same-size save
+    // within one timestamp tick is
+    if (hash==watchedHash) {
+      watchedStamp=stamp;
+      return;
+    }
+  } else if (stamp==watchedStamp) {
+    return;
+  }
   watchedStamp=stamp;
+  watchedHash=hash;
+  watchedHashed=hashed;
   if (modified) {
     showWarning(_("This song was changed on disk by another program.\nReload it? Your unsaved changes will be lost."),GUI_WARN_RELOAD);
   } else {
@@ -2938,6 +3025,7 @@ int FurnaceGUI::save(String path, int dmfVersion) {
     return 3;
   }
   logV("opening file for writing...");
+  uint64_t savedHash=SONG_HASH_INIT;
   FILE* outFile=ps_fopen(path.c_str(),"wb");
   if (outFile==NULL) {
     lastError=strerror(errno);
@@ -2981,6 +3069,7 @@ int FurnaceGUI::save(String path, int dmfVersion) {
           w->finish();
           return 1;
         }
+        savedHash=songHashUpdate(savedHash,zbuf,amount);
       }
     }
     zl.avail_out=131072;
@@ -3002,6 +3091,7 @@ int FurnaceGUI::save(String path, int dmfVersion) {
         w->finish();
         return 1;
       }
+      savedHash=songHashUpdate(savedHash,zbuf,131072-zl.avail_out);
     }
     deflateEnd(&zl);
   } else {
@@ -3012,6 +3102,7 @@ int FurnaceGUI::save(String path, int dmfVersion) {
       w->finish();
       return 1;
     }
+    savedHash=songHashUpdate(savedHash,w->getFinalBuf(),w->size());
   }
   fclose(outFile);
   w->finish();
@@ -3023,6 +3114,10 @@ int FurnaceGUI::save(String path, int dmfVersion) {
   // an outside change right after this save is still noticed
   watchedFileName=curFileName;
   watchedStamp=songFileStamp(curFileName);
+  // from the bytes written rather than a re-read, so a change landing right
+  // after this save still counts
+  watchedHash=savedHash;
+  watchedHashed=true;
   updateWindowTitle();
   if (!e->getWarnings().empty()) {
     showWarning(e->getWarnings(),GUI_WARN_GENERIC);
@@ -3035,6 +3130,8 @@ int FurnaceGUI::save(String path, int dmfVersion) {
 
 int FurnaceGUI::load(String path) {
   bool wasPlaying=e->isPlaying();
+  uint64_t loadedHash=0;
+  bool loadedHashed=false;
   if (!path.empty()) {
     logI("loading module...");
     FILE* f=ps_fopen(path.c_str(),"rb");
@@ -3082,6 +3179,8 @@ int FurnaceGUI::load(String path) {
       return 1;
     }
     fclose(f);
+    loadedHash=songHashUpdate(SONG_HASH_INIT,file,(size_t)len);
+    loadedHashed=true;
     // a MIDI needs import options picked first. bounce it to the dialog, which
     // calls back into here with midiImportPending set once the user confirms.
     if (!midiImportPending && len>=4 && memcmp(file,"MThd",4)==0) {
@@ -3102,6 +3201,8 @@ int FurnaceGUI::load(String path) {
   modified=false;
   watchedFileName=curFileName;
   watchedStamp=songFileStamp(curFileName);
+  watchedHash=loadedHash;
+  watchedHashed=loadedHashed;
   curNibble=0;
   orderNibble=false;
   orderCursor=-1;

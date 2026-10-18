@@ -60,15 +60,14 @@ def order_starts(song):
     return [0.0] + times[:-1], times[-1]
 
 
-def _silent(x, block=2048):
+def _silent(x, moving=1e-4, min_samples=64):
     """True when x only sits at constant levels: idle chips can hold an offset, or
     step to one when the song starts, which peak-to-peak would count as sound.
-    A step moves one block; anything audible moves more than one."""
-    n = len(x) // block * block
-    if not n:
+    A step settles within a few samples (about 16 move by more than 1e-4 in a
+    render); a drum hit of 1.5 ms or more moves many more."""
+    if len(x) < 2:
         return True
-    blocks = x[:n].reshape(-1, block, x.shape[1])
-    return int((blocks.std(axis=1).max(axis=1) >= SILENT).sum()) <= 1
+    return int((np.abs(np.diff(x, axis=0)).max(axis=1) > moving).sum()) < min_samples
 
 
 def _ticks(total, width):
@@ -121,15 +120,18 @@ _HEAT = np.array([(0, 0, 4), (40, 11, 84), (101, 21, 110), (159, 42, 99),
 def _draw_spectrogram(img, x0, y0, w, h, x, rate, fmin=40.0):
     """Log-frequency spectrogram of the mix, columns aligned with the waveforms.
     Returns [(y, label)] for the frequency ticks."""
-    mono = x.mean(axis=1)
     fmax = min(16000.0, rate / 2)
     size = 4096 if rate > 32000 else 2048
     win = np.hanning(size)
-    centers = (np.arange(w) + 0.5) * len(mono) / w
-    pad = np.concatenate([np.zeros(size // 2), mono, np.zeros(size // 2)])
-    frames = np.stack([pad[int(c):int(c) + size] for c in centers])
-    mag = np.abs(np.fft.rfft(frames * win, axis=1)) / (win.sum() / 2)
-    db = 20 * np.log10(mag + 1e-9)
+    centers = (np.arange(w) + 0.5) * len(x) / w
+    # power averaged over the outputs, not the spectrum of their average: some
+    # chips put opposite polarity on left and right, which a mono sum cancels
+    power = 0.0
+    for c in range(x.shape[1]):
+        pad = np.concatenate([np.zeros(size // 2), x[:, c], np.zeros(size // 2)])
+        frames = np.stack([pad[int(k):int(k) + size] for k in centers])
+        power = power + (np.abs(np.fft.rfft(frames * win, axis=1)) / (win.sum() / 2)) ** 2
+    db = 10 * np.log10(power / x.shape[1] + 1e-18)
     freqs = np.fft.rfftfreq(size, 1 / rate)
     # each pixel row takes the loudest bin in its slice of log frequency
     rows = np.geomspace(fmax, fmin, h + 1)
@@ -288,7 +290,13 @@ def draw_note(wav, on, off, f0, report, out_png, *, width=1200, ffmpeg="ffmpeg")
     x, rate = read_wav(wav)
     left, pw = 120, width - 130
     span = max(int(4 / f0 * rate), 16)
-    shots = [("attack +20 ms", on + 0.02), ("held +150 ms", on + 0.15), ("before release", off - 0.1)]
+    # inside the hold however short it is: 20 ms in, then 150 ms in (or halfway),
+    # then 100 ms before note off (or a quarter of the hold)
+    hold = max(off - on, 0.0)
+    held = min(0.15, hold / 2)
+    shots = [("attack +20 ms", on + min(0.02, hold / 4)),
+             (f"held +{held * 1000:.0f} ms", on + held),
+             ("before release", off - min(0.1, hold / 4))]
     whole_h, shot_h, bars_h, gap = 130, 110, 150, 8
     height = gap + whole_h + 18 + len(shots) * (shot_h + gap) + bars_h + gap
     img = np.empty((height + height % 2, width, 3), np.uint8)
@@ -299,13 +307,13 @@ def draw_note(wav, on, off, f0, report, out_png, *, width=1200, ffmpeg="ffmpeg")
     _draw_wave(img, left, y, pw, whole_h, x, _MIX)
     texts.append((6, y + 4, "whole note", 13, _TEXT))
     for t, name in ((on, "note on"), (off, "note off")):
-        _mark(img, texts, left + int(t / total * (pw - 1)), y, y + whole_h, name)
+        _mark(img, texts, left + int(min(max(t / total, 0.0), 1.0) * (pw - 1)), y, y + whole_h, name)
     for _, t in shots:  # red ticks: where the close-ups are taken
-        _mark(img, texts, left + int(t / total * (pw - 1)), y + whole_h - 10, y + whole_h, "", _CLIPPED)
+        _mark(img, texts, left + int(min(max(t / total, 0.0), 1.0) * (pw - 1)), y + whole_h - 10, y + whole_h, "", _CLIPPED)
     step = _ticks(total, pw)
     t = 0.0
     while t <= total + 1e-9:
-        texts.append((left + int(t / total * (pw - 1)), y + whole_h + 2, _clock(t, step), 11, _DIM_TEXT))
+        texts.append((left + int(min(max(t / total, 0.0), 1.0) * (pw - 1)), y + whole_h + 2, _clock(t, step), 11, _DIM_TEXT))
         t += step
     y += whole_h + 18
     for name, t in shots:
@@ -326,6 +334,25 @@ def draw_note(wav, on, off, f0, report, out_png, *, width=1200, ffmpeg="ffmpeg")
               for k in ("attack", "held") if k in timbre]
     _draw_bars(img, texts, left, y, pw, bars_h, groups or [("harmonics", [])])
     return _write(exe, img, texts, out_png)
+
+
+def _loop_seam(x, loop, k=48):
+    """(audio, index of the join, title, caption): k samples either side of where
+    a loop (start, end, mode) wraps, in the order they play. Modes as Furnace's
+    sample loop modes: 0 forward (end, then start), 1 backward (down to the start,
+    then from the end down), 2 ping-pong (turns around at the end: no jump)."""
+    s0, s1, mode = loop
+    start, end = x[s0:min(s0 + k, s1)], x[max(s1 - k, s0):s1]
+    if mode == 1:
+        first, second = start[::-1], end[::-1]
+        title, note = "loop seam", "loop start, played backward | its end, as it plays"
+    elif mode == 2:
+        first, second = end, end[::-1]
+        title, note = "loop turnaround", "end of the loop | back the other way (ping-pong: no jump)"
+    else:
+        first, second = end, start
+        title, note = "loop seam", "end of the loop | its start, as it plays"
+    return np.concatenate([first, second]), len(first), title, note
 
 
 def draw_sample(x, loop, span, out_png, *, width=1200, ffmpeg="ffmpeg"):
@@ -358,15 +385,10 @@ def draw_sample(x, loop, span, out_png, *, width=1200, ffmpeg="ffmpeg"):
     texts.append((left, y + whole_h + 2, "0", 11, _DIM_TEXT))
     texts.append((left + pw - 90, y + whole_h + 2, f"{len(x)} samples", 11, _DIM_TEXT))
     y += whole_h + 18
-    k = 48
-    cut = None
     if loop:
-        s0, s1 = loop[0], loop[1]
-        tail, head = x[max(s1 - k, s0):s1], x[s0:min(s0 + k, s1)]
-        seam, cut = np.concatenate([tail, head]), len(tail)
-        title, note = "loop seam", "end of the loop | its start, as it plays"
+        seam, cut, title, note = _loop_seam(x, loop)
     else:
-        seam = x[a:a + 2 * k]
+        seam, cut = x[a:a + 96], None
         title, note = "measured part", f"samples {a}-{a + len(seam)}"
     if len(seam) >= 2:
         _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE)

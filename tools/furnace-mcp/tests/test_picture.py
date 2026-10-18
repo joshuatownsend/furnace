@@ -94,3 +94,46 @@ def test_draw_writes_a_png(tmp_path):
     data = r["path"].read_bytes()
     assert data[:8] == b"\x89PNG\r\n\x1a\n"
     assert int.from_bytes(data[16:20], "big") == 1200
+
+
+def test_silent_keeps_a_lone_short_hit():
+    x = np.zeros((44100, 1), np.float32)
+    t = np.arange(882) / 44100  # a 20 ms hit, inside one 2048-sample block
+    x[20000:20882, 0] = 0.3 * np.sin(2 * np.pi * 180 * t) * np.exp(-t * 150)
+    assert not picture._silent(x)
+    assert not picture._silent(x[19900:21000])  # shorter than a block
+
+
+def test_spectrogram_survives_antiphase_stereo():
+    t = np.arange(44100) / 44100
+    s = 0.5 * np.sin(2 * np.pi * 440 * t)
+    out = []
+    for x in (np.stack([s, s], axis=1), np.stack([s, -s], axis=1)):
+        img = np.zeros((80, 200, 3), np.uint8)
+        picture._draw_spectrogram(img, 0, 0, 200, 80, x, 44100)
+        out.append(int(img.sum()))
+    assert out[1] == out[0]  # opposite polarity looks the same, not blank
+
+
+def test_loop_seam_follows_the_loop_mode():
+    x = np.arange(100, dtype=np.float32).reshape(-1, 1)
+    fwd, cut, title, _ = picture._loop_seam(x, (20, 80, 0), k=3)
+    assert fwd[:, 0].tolist() == [77, 78, 79, 20, 21, 22] and cut == 3 and title == "loop seam"
+    back, cut, _, _ = picture._loop_seam(x, (20, 80, 1), k=3)
+    assert back[:, 0].tolist() == [22, 21, 20, 79, 78, 77]
+    pp, cut, title, _ = picture._loop_seam(x, (20, 80, 2), k=3)
+    assert pp[:, 0].tolist() == [77, 78, 79, 79, 78, 77] and title == "loop turnaround"
+
+
+@needs_ffmpeg
+def test_note_picture_with_a_short_hold_and_no_release(tmp_path):
+    import wave
+    rate = 44100
+    t = np.arange(int(0.2 * rate)) / rate
+    x = (0.3 * np.sin(2 * np.pi * 262 * t) * (t > 0.1)).astype(np.float32)
+    with wave.open(str(tmp_path / "n.wav"), "wb") as w:
+        w.setnchannels(1), w.setsampwidth(2), w.setframerate(rate)
+        w.writeframes((x * 32767).astype("<i2").tobytes())
+    # note on at 0.1 s, off at the very end: one row held, no release rendered
+    out = picture.draw_note(tmp_path / "n.wav", 0.1, 0.2, 262.0, {}, tmp_path / "n.png")
+    assert out.read_bytes()[:4] == b"\x89PNG"

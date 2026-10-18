@@ -6,7 +6,18 @@ from furnace_mcp import scheme
 
 
 def test_light_preset_is_readable():
-    assert scheme.contrast_report(scheme.light_scheme()) == []
+    # basic mode (buttons, tabs, headers from the accents) and guru mode alike
+    light = scheme.light_scheme()
+    assert scheme.contrast_report(light, settings={"guiColorsBase": "1"}) == []
+    assert scheme.contrast_report(light, settings={"guiColorsBase": "1", "basicColors": "0"}) == []
+
+
+def test_basic_mode_checks_the_colors_drawn_from_the_accents():
+    light = scheme.light_scheme()
+    light["GUI_COLOR_ACCENT_PRIMARY"] = (0.0, 0.0, 0.0, 1.0)  # black buttons under dark text
+    low = {(fg, bg) for fg, bg, _ in scheme.contrast_report(light, settings={"guiColorsBase": "1"})}
+    assert ("GUI_COLOR_TEXT", "GUI_COLOR_BUTTON") in low
+    assert scheme.contrast_report(light, settings={"guiColorsBase": "1", "basicColors": "0"}) == []
 
 
 def test_light_preset_sets_every_color():
@@ -35,10 +46,16 @@ def test_contrast_check_flags_unreadable_text():
     assert ("GUI_COLOR_TEXT", "GUI_COLOR_FRAME_BACKGROUND") in low
 
 
-def test_dark_defaults_have_two_dim_effect_colors():
-    # upstream's own defaults: the time and misc effect colors are below AA on black
-    low = [(fg, round(r, 2)) for fg, _, r in scheme.contrast_report(scheme.defaults())]
-    assert low == [("GUI_COLOR_PATTERN_EFFECT_TIME", 3.28), ("GUI_COLOR_PATTERN_EFFECT_MISC", 3.72)]
+def test_dark_defaults_fail_on_the_cursor():
+    # upstream's own defaults: two effect colors are below AA on black, and seven
+    # pattern colors are below it under the dark blue cursor
+    low = [(fg[10:], bg[10:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
+    assert low == [
+        ("PATTERN_EFFECT_TIME", "PATTERN_BG", 3.28), ("PATTERN_EFFECT_MISC", "PATTERN_BG", 3.72),
+        ("PATTERN_INS", "PATTERN_CURSOR", 3.92), ("PATTERN_VOLUME_HALF", "PATTERN_CURSOR", 3.53),
+        ("PATTERN_EFFECT_INVALID", "PATTERN_CURSOR", 2.19), ("PATTERN_EFFECT_SONG", "PATTERN_CURSOR", 2.19),
+        ("PATTERN_EFFECT_TIME", "PATTERN_CURSOR", 1.4), ("PATTERN_EFFECT_SPEED", "PATTERN_CURSOR", 2.79),
+        ("PATTERN_EFFECT_MISC", "PATTERN_CURSOR", 1.59)]
 
 
 def test_contrast_ratio_matches_wcag():

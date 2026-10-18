@@ -400,7 +400,7 @@ def draw_sample(x, loop, span, out_png, *, clip=CLIP, width=1200, ffmpeg="ffmpeg
         seam, cut = x[a:a + 96], None
         title, note = "measured part", f"samples {a}-{a + len(seam)}"
     if len(seam) >= 2:
-        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE)
+        _draw_wave(img, left, y, pw, close_h, _stretch(seam, pw), _WAVE, clip)
         if cut:
             _mark(img, texts, left + int(cut / len(seam) * (pw - 1)), y, y + close_h, "", _CLIPPED)
     texts.append((6, y + 4, title, 13, _TEXT))

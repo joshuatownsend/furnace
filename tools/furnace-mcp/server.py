@@ -510,8 +510,9 @@ def detect_sample_pitch(sample: int, image: bool = False, path: str = ""):
     if clipped:
         at = np.flatnonzero(np.abs(x) >= level - 1e-6)
         lines.append(f"clipping: {clipped} samples sit flat at full scale ({100 * clipped / len(x):.1f}% "
-                     f"of the sample, between samples {at[0]} and {at[-1]}); it is in the "
-                     "recording, so it sounds harsh whatever the volume")
+                     f"of the sample, between samples {at[0]} and {at[-1]}). Unless it's a "
+                     "square wave drawn at full scale, that's clipping in the recording, "
+                     "which sounds harsh whatever the volume")
     lines.append(_sample_users(s, sample))
     if not image:
         return "\n".join(lines)

@@ -409,12 +409,14 @@ def full_scale(depth):
 
 
 def clipped_runs(x, level):
-    """Samples of x that sit at full scale (|x| >= level) next to another one that
-    does: flat tops, the mark of clipping. A lone peak at full scale isn't counted."""
-    at = np.abs(np.asarray(x)) >= level - 1e-6
-    if len(at) < 2:
+    """Samples of x that sit at full scale next to another one on the same rail:
+    flat tops, the mark of clipping. A lone peak isn't counted, and neither is a
+    jump straight from one rail to the other."""
+    x = np.asarray(x)
+    if len(x) < 2:
         return 0
-    pair = at[1:] & at[:-1]
+    pos, neg = x >= level - 1e-6, x <= -(level - 1e-6)
+    pair = (pos[1:] & pos[:-1]) | (neg[1:] & neg[:-1])
     return int((np.r_[pair, False] | np.r_[False, pair]).sum())
 
 

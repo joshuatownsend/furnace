@@ -146,4 +146,6 @@ def test_clipped_runs_count_flat_tops_only():
     x[10] = level  # a lone peak at full scale: not clipping
     x[50:54] = -1.0  # a flat top
     assert analysis.clipped_runs(x, level) == 4
+    alt = np.tile([level, -1.0], 50)  # straight from rail to rail: no flat top
+    assert analysis.clipped_runs(alt, level) == 0
     assert level == 127 / 128 and analysis.full_scale(16) == 32767 / 32768

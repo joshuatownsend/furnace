@@ -174,7 +174,12 @@ def layout(keys, steps_per_channel):
     up = {at[x, y + 1] - d for (x, y), d in at.items() if (x, y + 1) in at}
     if len(right) != 1 or len(up) != 1:
         return None
-    return right.pop(), up.pop()
+    a, b = right.pop(), up.pop()
+    # the slopes only compare neighbours: regions with no key between them
+    # must also share the offset c
+    if len({d - a * x - b * y for (x, y), d in at.items()}) != 1:
+        return None
+    return a, b
 
 
 def guess_steps_per_channel(keys, most=128):

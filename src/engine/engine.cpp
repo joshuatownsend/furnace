@@ -3821,7 +3821,9 @@ void DivEngine::autoNoteOff(int ch, int note, int vol, int key) {
 // fork prototype (ideas/019)
 void DivEngine::midiNoteIn(int ch, int note, int vel, int ins, bool on) {
   if (ch<0 || ch>15 || note<0 || note>127) return;
-  if (microKeys) {
+  // a detune is E5xx units, which only mean cents under linear pitch: under
+  // non-linear pitch (+50 cents plays about +164 on FM) play plain notes
+  if (microKeys && song.compatFlags.linearPitch) {
     // keys not in the table play their plain note, with no detune: the
     // channel may still hold the last key's. All keys release by key.
     int key=(ch<<7)|note;

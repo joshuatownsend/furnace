@@ -50,6 +50,17 @@ def test_a_wrong_channel_rule_breaks_the_layout():
     assert t.layout(preset("53ET"), 31) is None
 
 
+def test_separate_regions_must_share_one_offset():
+    keys = preset("31ET")
+    assert t.layout(keys, 31) == (5, 2)
+    # two keys far from the rest (board 4's corner) moved up one step: every
+    # neighbour step is unchanged, but the offset no longer fits them
+    far = {(4, 54), (4, 55)}
+    moved = [k._replace(note=k.note + 1) if (k.board, k.key) in far else k for k in keys]
+    near = [k for k in moved if (k.board, k.key) not in {(4, 53), (4, 52), (4, 48), (4, 49)}]
+    assert t.layout(near, 31) is None
+
+
 def test_read_scl(tmp_path):
     f = tmp_path / "x.scl"
     f.write_text("! meantone\n!\nQuarter-comma meantone, 3 notes\n 3\n!\n193.157\n5/4 ! a third\n2\n")

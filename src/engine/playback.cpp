@@ -2196,6 +2196,14 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
         // fire command
         dispatchCmd(DivCommand(DIV_CMD_VOLUME,note.channel,mappedVol));
       }
+      // fork prototype (ideas/019): a live note with no detune of its own (a
+      // GUI preview) gets the song's pitch back, not the last key's detune
+      if (note.pitch==DIV_NO_PITCH && chan[note.channel].livePitchSaved!=DIV_NO_PITCH) {
+        chan[note.channel].pitch=chan[note.channel].livePitchSaved;
+        chan[note.channel].livePitchSaved=DIV_NO_PITCH;
+        dispatchCmd(DivCommand(DIV_CMD_PITCH,note.channel,chan[note.channel].pitch+(((chan[note.channel].vibratoDepth*vibTable[chan[note.channel].vibratoPos]*chan[note.channel].vibratoFine)>>4)/15)));
+        dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,note.channel,chan[note.channel].pitch));
+      }
       // fork prototype (ideas/019): a microtonal key's detune, as E5xx sets it
       if (note.pitch!=DIV_NO_PITCH) {
         // keep the song's pitch from before the first live key

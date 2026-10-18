@@ -237,6 +237,8 @@ While a table is on, keys missing from it play their plain note with the detune 
 
 **Live keys over a playing song**: a live key's detune would otherwise stay on the channel. The channel now keeps the song's own pitch, and the next pattern note puts it back unless that row sets a new one. Tested: song C-4 at +12.5, key B at +39 on the same channel, then the song's next C-4 plays +12.5 again, +50 when it has `E5C0`, and +39 when it asks for B's own detune with `E5B2`.
 
+**Non-linear-pitch songs** ignore the key table in the prototype: keys play their plain MIDI notes (checked: key B plays C#4). **GUI preview notes** on a channel a live key detuned get the song's pitch back first.
+
 **Not done in step 4:** recording (the GUI side, step 6). Nothing has been tried with a real keyboard.
 
 ### Where this leaves the decision

@@ -246,6 +246,9 @@ struct DivJSONExportOptions {
 /**
  * this struct contains playback state for a channel.
  */
+// fork prototype (ideas/019): no detune on a live note
+#define DIV_NO_PITCH (-0x8000)
+
 struct DivChannelState {
   // currently unused. not sure why it is here.
   std::vector<DivDelayedCommand> delayed;
@@ -335,6 +338,13 @@ struct DivChannelState {
 
   // MIDI state variables.
   int midiNote, curMidiNote, midiPitch;
+  // fork prototype (ideas/019): the MIDI channel and note (chan<<7|note) that
+  // started midiNote when a microtonal key table is on, else -1
+  int midiKey;
+  // fork prototype (ideas/019): the song's own pitch before a live key
+  // detuned this channel, DIV_NO_PITCH if none. The next pattern note puts
+  // it back; an E5xx clears it.
+  int livePitchSaved;
   size_t midiAge;
   bool midiAftertouch;
 
@@ -404,6 +414,8 @@ struct DivChannelState {
     midiNote(-1),
     curMidiNote(-1),
     midiPitch(-1),
+    midiKey(-1),
+    livePitchSaved(DIV_NO_PITCH),
     midiAge(0),
     midiAftertouch(false) {}
 };
@@ -423,7 +435,10 @@ struct DivNoteEvent {
   // insChange: whether we have an instrument change.
   // fromMIDI: whether the event was caused by MIDI input.
   bool on, nop, insChange, fromMIDI;
-  DivNoteEvent(int c, int i, int n, int v, bool o, bool ic=false, bool fm=false):
+  // fork prototype (ideas/019): a detune in E5xx units (1/128 semitone) sent
+  // with the note, or DIV_NO_PITCH.
+  int pitch;
+  DivNoteEvent(int c, int i, int n, int v, bool o, bool ic=false, bool fm=false, int p=DIV_NO_PITCH):
     channel(c),
     ins(i),
     note(n),
@@ -431,7 +446,8 @@ struct DivNoteEvent {
     on(o),
     nop(false),
     insChange(ic),
-    fromMIDI(fm) {}
+    fromMIDI(fm),
+    pitch(p) {}
   DivNoteEvent():
     channel(-1),
     ins(0),
@@ -440,7 +456,8 @@ struct DivNoteEvent {
     on(false),
     nop(true),
     insChange(false),
-    fromMIDI(false) {}
+    fromMIDI(false),
+    pitch(DIV_NO_PITCH) {}
 };
 
 /**
@@ -910,6 +927,20 @@ class DivEngine {
   bool midiDebug;
   // used to keep track of the oldest active channel.
   size_t midiAgeCounter;
+  // fork prototype (ideas/019): microtonal key table, MIDI (channel, note) to
+  // a Furnace note and detune; microNote is -1 for keys not in the table
+  bool microKeys;
+  short microNote[16][128];
+  short microPitch[16][128];
+  // fork prototype (ideas/019): timed MIDI events fed in during export
+  // (-livetest), one tick at a time
+  struct LiveTestEvent {
+    int tick;
+    unsigned char type, data0, data1;
+  };
+  std::vector<LiveTestEvent> liveTest;
+  size_t liveTestPos;
+  int liveTestTick;
 
   // sample preview state.
   blip_buffer_t* samp_bb;
@@ -1958,8 +1989,17 @@ class DivEngine {
     void noteOff(int chan);
 
     // returns whether it could
-    bool autoNoteOn(int chan, int ins, int note, int vol=-1, int transpose=0);
-    void autoNoteOff(int chan, int note, int vol=-1);
+    bool autoNoteOn(int chan, int ins, int note, int vol=-1, int transpose=0, int pitch=DIV_NO_PITCH, int key=-1);
+    void autoNoteOff(int chan, int note, int vol=-1, int key=-1);
+
+    // fork prototype (ideas/019): a MIDI note on or off (velocity 0) from a
+    // keyboard, through the microtonal key table when one is set
+    void midiNoteIn(int chan, int note, int vel, int ins, bool on);
+    // set the key table: entries of (MIDI channel 0-15, MIDI note, Furnace note,
+    // E5xx value); empty turns it off
+    void setMicroKeys(const std::vector<int>& entries);
+    // events for -livetest: (tick, status byte, data 1, data 2)
+    void setLiveTest(const std::vector<int>& events);
     void autoNoteOffAll();
 
     // set whether autoNoteIn is mono or poly
@@ -2325,6 +2365,9 @@ class DivEngine {
       midiPoly(true),
       midiDebug(false),
       midiAgeCounter(0),
+      microKeys(false),
+      liveTestPos(0),
+      liveTestTick(0),
       samp_bb(NULL),
       samp_bbInLen(0),
       samp_temp(0),

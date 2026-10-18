@@ -1457,6 +1457,9 @@ void DivEngine::processRow(int i, bool afterDelay) {
         break;
       case 0xe5: // pitch
         chan[i].pitch=effectVal-0x80;
+        // fork prototype (ideas/019): the song set its own pitch, so there's
+        // nothing to restore after a live key
+        chan[i].livePitchSaved=DIV_NO_PITCH;
         // send pitch now
         dispatchCmd(DivCommand(DIV_CMD_PITCH,i,chan[i].pitch+(((chan[i].vibratoDepth*vibTable[chan[i].vibratoPos]*chan[i].vibratoFine)>>4)/15)));
         dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,i,chan[i].pitch));
@@ -1660,6 +1663,12 @@ void DivEngine::processRow(int i, bool afterDelay) {
 
   // commit note on
   if (chan[i].doNote) {
+    // fork prototype (ideas/019): a pattern note after a live microtonal key
+    // gets the song's pitch back (an E5xx since then cleared livePitchSaved)
+    if (chan[i].livePitchSaved!=DIV_NO_PITCH) {
+      chan[i].pitch=chan[i].livePitchSaved;
+      chan[i].livePitchSaved=DIV_NO_PITCH;
+    }
     // COMPAT FLAG: continuous vibrato
     // - when enabled, the vibrato position is not reset on each note
     if (!song.compatFlags.continuousVibrato) {
@@ -2115,7 +2124,21 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
   }
 
   // don't let user play anything during export
-  if (exporting) pendingNotes.clear();
+  if (exporting && liveTest.empty()) pendingNotes.clear();
+
+  // fork prototype (ideas/019): -livetest MIDI events, by tick. Low-latency
+  // mode calls this tickMult times a tick; subticks<=1 means this call is the
+  // one that runs the full tick.
+  if (!liveTest.empty() && !skipping && subticks<=1) {
+    while (liveTestPos<liveTest.size() && liveTest[liveTestPos].tick<=liveTestTick) {
+      const LiveTestEvent& ev=liveTest[liveTestPos++];
+      bool on=(ev.type&0xf0)==TA_MIDI_NOTE_ON && ev.data1>0;
+      if ((ev.type&0xf0)==TA_MIDI_NOTE_ON || (ev.type&0xf0)==TA_MIDI_NOTE_OFF) {
+        midiNoteIn(ev.type&15,ev.data0,ev.data1,0,on);
+      }
+    }
+    liveTestTick++;
+  }
 
   // process pending notes (live playback)
   if (!pendingNotes.empty()) {
@@ -2172,6 +2195,24 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
         }
         // fire command
         dispatchCmd(DivCommand(DIV_CMD_VOLUME,note.channel,mappedVol));
+      }
+      // fork prototype (ideas/019): a live note with no detune of its own (a
+      // GUI preview) gets the song's pitch back, not the last key's detune
+      if (note.pitch==DIV_NO_PITCH && chan[note.channel].livePitchSaved!=DIV_NO_PITCH) {
+        chan[note.channel].pitch=chan[note.channel].livePitchSaved;
+        chan[note.channel].livePitchSaved=DIV_NO_PITCH;
+        dispatchCmd(DivCommand(DIV_CMD_PITCH,note.channel,chan[note.channel].pitch+(((chan[note.channel].vibratoDepth*vibTable[chan[note.channel].vibratoPos]*chan[note.channel].vibratoFine)>>4)/15)));
+        dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,note.channel,chan[note.channel].pitch));
+      }
+      // fork prototype (ideas/019): a microtonal key's detune, as E5xx sets it
+      if (note.pitch!=DIV_NO_PITCH) {
+        // keep the song's pitch from before the first live key
+        if (chan[note.channel].livePitchSaved==DIV_NO_PITCH) {
+          chan[note.channel].livePitchSaved=chan[note.channel].pitch;
+        }
+        chan[note.channel].pitch=note.pitch;
+        dispatchCmd(DivCommand(DIV_CMD_PITCH,note.channel,chan[note.channel].pitch+(((chan[note.channel].vibratoDepth*vibTable[chan[note.channel].vibratoPos]*chan[note.channel].vibratoFine)>>4)/15)));
+        dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,note.channel,chan[note.channel].pitch));
       }
       // send note on command and set channel state
       dispatchCmd(DivCommand(DIV_CMD_NOTE_ON,note.channel,note.note));
@@ -2987,7 +3028,7 @@ void DivEngine::nextBuf(float** in, float** out, int inChans, int outChans, unsi
             pendingNotes.push_back(DivNoteEvent(chan,-1,0,-1,false,false,true));
           } else {
             // find a suitable channel and add this event to the queue
-            autoNoteOff(msg.type&15,msg.data[0]-12+60,msg.data[1]);
+            midiNoteIn(msg.type&15,msg.data[0],msg.data[1],ins,false);
           }
           // start the engine if necessary
           if (!playing) {
@@ -3006,7 +3047,7 @@ void DivEngine::nextBuf(float** in, float** out, int inChans, int outChans, unsi
               pendingNotes.push_back(DivNoteEvent(chan,-1,0,-1,false,false,true));
             } else {
               // find a suitable channel and add this event to the queue
-              autoNoteOff(msg.type&15,msg.data[0]-12+60,msg.data[1]);
+              midiNoteIn(msg.type&15,msg.data[0],msg.data[1],ins,false);
             }
           } else {
             if (midiIsDirect) {
@@ -3015,7 +3056,7 @@ void DivEngine::nextBuf(float** in, float** out, int inChans, int outChans, unsi
               pendingNotes.push_back(DivNoteEvent(chan,ins,msg.data[0]-12+60,msg.data[1],true,false,true));
             } else {
               // find a suitable channel and add this event to the queue
-              autoNoteOn(msg.type&15,ins,msg.data[0]-12+60,msg.data[1]);
+              midiNoteIn(msg.type&15,msg.data[0],msg.data[1],ins,true);
             }
           }
           break;

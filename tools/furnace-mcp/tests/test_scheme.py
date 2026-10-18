@@ -66,12 +66,12 @@ def test_contrast_check_flags_unreadable_text():
 
 def test_dark_defaults_fail_on_pressed_widgets_and_the_hovered_cursor():
     # upstream's own defaults: white text on pressed buttons, inputs and headers,
-    # and eleven pattern colors, worst on the light blue hovered cursor
+    # and twelve pattern colors, worst on the light blue hovered cursor
     low = [(fg[10:], bg[10:], round(r, 2)) for fg, bg, r in scheme.contrast_report(scheme.defaults())]
     assert low[:3] == [("TEXT", "BUTTON_ACTIVE", 3.58), ("TEXT", "WIDGET_BACKGROUND_ACTIVE", 3.0),
                        ("TEXT", "IMGUI_HEADER_ACTIVE", 3.0)]
     assert [(fg[8:], bg) for fg, bg, _ in low[3:]] == [(k, "PATTERN_CURSOR_HOVER") for k in (
-        "INS", "INS_ERROR", "VOLUME_MAX", "VOLUME_HALF", "EFFECT_INVALID", "EFFECT_VOLUME",
+        "INS", "INS_ERROR", "VOLUME_MAX", "VOLUME_HALF", "VOLUME_MIN", "EFFECT_INVALID", "EFFECT_VOLUME",
         "EFFECT_SONG", "EFFECT_TIME", "EFFECT_SPEED", "EFFECT_SYS_SECONDARY", "EFFECT_MISC")]
 
 

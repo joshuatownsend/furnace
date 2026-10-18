@@ -94,11 +94,13 @@ _CELL_BGS = _ROW_BGS + [cell + row for row in _ROW_BGS for cell in _CELL_STACKS]
 # order numbers: plain, the playing order, the song loop, or both
 _ORDER_BGS = [_WINDOW, ("GUI_COLOR_ORDER_ACTIVE",) + _WINDOW, ("GUI_COLOR_SONG_LOOP",) + _WINDOW,
               ("GUI_COLOR_SONG_LOOP", "GUI_COLOR_ORDER_ACTIVE") + _WINDOW]
-# row numbers sit on rows only; the inactive (dimmed placeholder) colors are left out on purpose
+# row numbers sit on rows only. Left out on purpose: the inactive (dimmed placeholder)
+# colors, and rows of the previous and next pattern, which are drawn faded to recede
 _ROW_TEXT = ["GUI_COLOR_PATTERN_ROW_INDEX", "GUI_COLOR_PATTERN_ROW_INDEX_HI1", "GUI_COLOR_PATTERN_ROW_INDEX_HI2"]
 _PATTERN_TEXT = ["GUI_COLOR_PATTERN_ACTIVE", "GUI_COLOR_PATTERN_ACTIVE_HI1", "GUI_COLOR_PATTERN_ACTIVE_HI2",
                  "GUI_COLOR_PATTERN_INS", "GUI_COLOR_PATTERN_INS_WARN", "GUI_COLOR_PATTERN_INS_ERROR",
-                 "GUI_COLOR_PATTERN_VOLUME_MAX", "GUI_COLOR_PATTERN_VOLUME_HALF"] + [
+                 "GUI_COLOR_PATTERN_VOLUME_MAX", "GUI_COLOR_PATTERN_VOLUME_HALF",
+                 "GUI_COLOR_PATTERN_VOLUME_MIN"] + [  # volume colors blend between these three
     f"GUI_COLOR_PATTERN_EFFECT_{k}" for k in ("INVALID", "PITCH", "VOLUME", "PANNING", "SONG", "TIME",
                                               "SPEED", "SYS_PRIMARY", "SYS_SECONDARY", "MISC")]
 

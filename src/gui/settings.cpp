@@ -593,15 +593,17 @@ void FurnaceGUI::drawContrastCheck() {
     {GUI_COLOR_PATTERN_CURSOR,-1},{GUI_COLOR_PATTERN_CURSOR_HOVER,-1},
     {GUI_COLOR_PATTERN_CURSOR,GUI_COLOR_PATTERN_SELECTION},{GUI_COLOR_PATTERN_CURSOR_HOVER,GUI_COLOR_PATTERN_SELECTION}
   };
-  // row numbers sit on rows only; the inactive (dimmed placeholder) colors are
-  // left out on purpose
+  // row numbers sit on rows only. left out on purpose: the inactive (dimmed
+  // placeholder) colors, and rows of the previous and next pattern, which are
+  // drawn faded to recede
   const int rowText[]={
     GUI_COLOR_PATTERN_ROW_INDEX,GUI_COLOR_PATTERN_ROW_INDEX_HI1,GUI_COLOR_PATTERN_ROW_INDEX_HI2
   };
   const int patternText[]={
     GUI_COLOR_PATTERN_ACTIVE,GUI_COLOR_PATTERN_ACTIVE_HI1,GUI_COLOR_PATTERN_ACTIVE_HI2,
     GUI_COLOR_PATTERN_INS,GUI_COLOR_PATTERN_INS_WARN,GUI_COLOR_PATTERN_INS_ERROR,
-    GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_VOLUME_HALF,
+    // volume colors blend between these three
+    GUI_COLOR_PATTERN_VOLUME_MAX,GUI_COLOR_PATTERN_VOLUME_HALF,GUI_COLOR_PATTERN_VOLUME_MIN,
     GUI_COLOR_PATTERN_EFFECT_INVALID,GUI_COLOR_PATTERN_EFFECT_PITCH,GUI_COLOR_PATTERN_EFFECT_VOLUME,
     GUI_COLOR_PATTERN_EFFECT_PANNING,GUI_COLOR_PATTERN_EFFECT_SONG,GUI_COLOR_PATTERN_EFFECT_TIME,
     GUI_COLOR_PATTERN_EFFECT_SPEED,GUI_COLOR_PATTERN_EFFECT_SYS_PRIMARY,GUI_COLOR_PATTERN_EFFECT_SYS_SECONDARY,
@@ -638,7 +640,7 @@ void FurnaceGUI::drawContrastCheck() {
   }
   const int total=(int)pairs.size();
   if (low.empty()) {
-    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1) on every background they are drawn on, hovered and pressed states included."),total);
+    ImGui::TextWrapped(_("Contrast: all %d text colors checked meet WCAG AA (4.5:1) on every background they are drawn on in the current pattern, hovered and pressed states included."),total);
     return;
   }
   ImGui::TextWrapped(_("Contrast: %d of %d text colors are below WCAG AA (4.5:1) on some background and may be hard to read:"),(int)low.size(),total);

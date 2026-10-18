@@ -1301,6 +1301,11 @@ int main(int argc, char** argv) {
       }
       e.saveAudio(outName.c_str(),exportOptions);
       e.waitAudioFile();
+      // -livetest is for the audio export only: ROM/S98 exports below replay the song
+      if (!liveTestEvents.empty()) {
+        e.setLiveTest({});
+        e.setMicroKeys({});
+      }
     }
     if (romOutName!="") {
       e.setConsoleMode(true);

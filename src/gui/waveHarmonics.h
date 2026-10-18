@@ -76,8 +76,10 @@ static inline void analyzeWaveHarmonics(const int* data, int len, int max, WaveH
     if (ph<0.0) ph+=1.0;
     out.amp[h-1]=a;
     out.phase[h-1]=(a<1e-6)?0.0f:ph;
-    total+=a*a;
-    if (h>16) above+=a*a;
+    // a sine of amplitude a carries a*a/2; the Nyquist bin is a full-height alternation
+    double energy=(h*2==len)?(a*a):(a*a*0.5);
+    total+=energy;
+    if (h>16) above+=energy;
   }
   out.energyAbove16=(total>0.0)?(above/total):0.0f;
 }

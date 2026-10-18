@@ -16,7 +16,7 @@ Fork goal (maintainer, 2026-10-15): **personal fork**. Upstream acceptance doesn
 | 005 | Detect sample pitch automatically | Validate | 6/10 | inside-out | S–M | SELECTED (spike brief) | [005-sample-pitch-detect.md](005-sample-pitch-detect.md) |
 | 006 | Write new chip emulators with Claude (recipe + pilot chip) | Validate | 8/10 | both | M, then M–L per chip | DONE (spike merged to master as #6, `f5ed7676e`, 2026-10-17; Bally Astrocade is the first fork chip; recipe in [chip-recipe.md](chip-recipe.md); Josh checked the GUI) | [006-chip-emulators-with-claude.md](006-chip-emulators-with-claude.md) |
 | 007 | Color themes and a Perfect Palette link | Advance | 7/10 (estimate) | both | S–M | SELECTED (spike brief) | [007-color-themes.md](007-color-themes.md) |
-| 014 | Oscilloscope video export | Advance | 7/10 (estimate) | outside-in | M | SELECTED (spike brief) | [014-oscilloscope-video-export.md](014-oscilloscope-video-export.md) |
+| 014 | Oscilloscope video export | Advance | 7/10 (estimate) | outside-in | M | BUILT (approach B: `export_video` in furnace-mcp plus a `-exportchans` CLI flag, 2026-10-17; Michael hasn't seen it yet) | [014-oscilloscope-video-export.md](014-oscilloscope-video-export.md) |
 
 Dependencies: 002 → 001 → 003 ← 004. 005 and 006 are independent. 001 to 004 and 006 are merged. 014 builds on 002 and takes colors from 007.
 

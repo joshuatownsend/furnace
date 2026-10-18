@@ -75,6 +75,25 @@ def info(path, subsong=None):
     return run([*args, path]).strip()
 
 
+EXT_OPERATOR = 5  # DivChanType of an extended FM channel's operators
+_CHANNEL_LINE = re.compile(r"^- (\d+): (.*) \[type (\d+)\]$")
+
+
+def channels(song):
+    """[(name, type)] per channel, as Furnace names them (custom names included),
+    with each one's DivChanType. From the CHANNELS section of furnace -info."""
+    with tempfile.TemporaryDirectory() as td:
+        src = Path(td) / "song.json"
+        src.write_text(json.dumps(song), encoding="utf-8")
+        text = run(["-info", src])
+    out = []
+    for line in text[text.index("\nCHANNELS\n"):].splitlines():
+        m = _CHANNEL_LINE.match(line)
+        if m:
+            out.append((m.group(2), int(m.group(3))))
+    return out
+
+
 def load(path):
     """Load any song furnace can open, as the JSON dict -jsonout produces."""
     path = Path(path)
@@ -107,18 +126,25 @@ def save(song, path):
         tmp.unlink(missing_ok=True)
 
 
-def render(song, wav_path, per_channel=False):
+def render(song, wav_path, per_channel=False, channels=None):
     """Render a song dict to WAV. Returns [(channel or None, path)].
 
     Per-channel renders name files <stem>_cNN.wav (1-based) and can skip
-    channels, so the channel comes from the file name, not the position."""
+    channels, so the channel comes from the file name, not the position.
+    channels (0-based) limits a per-channel render to those channels."""
     wav_path = Path(wav_path)
+    if per_channel:
+        # files from an earlier render under this name would come back as this one's
+        for f in wav_path.parent.glob(wav_path.stem + "_c*.wav"):
+            f.unlink()
     with tempfile.TemporaryDirectory() as td:
         src = Path(td) / "song.json"
         src.write_text(json.dumps(song), encoding="utf-8")
         args = ["-loops", 0, "-output", wav_path]
         if per_channel:
             args += ["-outmode", "perchan"]
+            if channels is not None:
+                args += ["-exportchans", ",".join(str(c + 1) for c in channels)]
         run([*args, src], timeout=1800)
     if per_channel:
         out = []
@@ -226,14 +252,20 @@ def subsong(song, index):
     return subs[index]
 
 
+def _part_number(words):
+    return next((w for w in words if re.search(r"[A-Za-z]", w) and re.search(r"\d", w)), None)
+
+
 def channel_labels(song):
     """One label per channel, e.g. 'YM2612 #3' (chip short name + 1-based index)."""
     labels = []
     for chip in song.get("chips", []):
         name = chip.get("name", "chip")
-        words = re.sub(r"\s*\(.*?\)", "", name).split()
-        # the part number names the chip best: "Yamaha YM2612 ..." -> YM2612
-        short = next((w for w in words if re.search(r"[A-Za-z]", w) and re.search(r"\d", w)), name)
+        # the part number names the chip best: "Yamaha YM2612 ..." -> YM2612,
+        # "NES (Ricoh 2A03)" -> 2A03; outside the brackets wins over inside
+        outside = re.sub(r"\s*\(.*?\)", "", name).split()
+        inside = re.findall(r"[\w-]+", " ".join(re.findall(r"\((.*?)\)", name)))
+        short = _part_number(outside) or _part_number(inside) or name
         for k in range(chip.get("channels", 0)):
             labels.append(f"{short} #{k + 1}")
     return labels

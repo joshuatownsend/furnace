@@ -18,7 +18,7 @@ from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from furnace_mcp import analysis, notation, song as fsong
+from furnace_mcp import analysis, notation, scheme as fscheme, song as fsong, video
 
 mcp = MCPServer(
     "furnace",
@@ -406,6 +406,33 @@ def export(output: str, format: str = "", path: str = "") -> str:
         raise ValueError(f"unknown format {fmt!r}; use one of {', '.join(flags)}")
     fsong.run([flags[fmt], out, p], timeout=1800)
     return f"wrote {out} ({out.stat().st_size} bytes)"
+
+
+@_tool(_EDIT)
+def export_video(output: str, order_start: int = 0, order_end: int | None = None,
+                 color: str = "mono", size: str = "1920x1080", fps: int = 60,
+                 scheme: str = "", subsong: int = 0, path: str = "") -> str:
+    """Make an oscilloscope video (mp4, H.264 + AAC, ready for YouTube): one scope
+    per audible channel, steadied on rising edges, with the song as the soundtrack.
+    Orders order_start..order_end (inclusive; default the whole song). Slow: each
+    channel is rendered separately, then every frame is drawn, so a full song
+    takes minutes; try a few orders first. color: "mono" (one wave color) or
+    "channel" (each channel's custom color, else one color per chip). scheme: a
+    color scheme file from Settings > Color > Export (default: the colors Furnace
+    uses now). Channels hidden from Furnace's Channel Oscilloscope are left out.
+    Needs ffmpeg on PATH. Writes output; does not change the song."""
+    p = _path(path)
+    out = Path(output).expanduser().resolve()
+    if out.suffix.lower() != ".mp4":
+        raise ValueError("output must be an .mp4 file")
+    width, height = video.parse_size(size)
+    colors = fscheme.read(Path(scheme).expanduser())[0] if scheme else None
+    r = video.make_video(_load(p), out, sub_index=subsong, order_start=order_start,
+                         order_end=order_end, width=width, height=height, fps=fps,
+                         colors=colors, color_mode=color)
+    return (f"wrote {r['path']} ({r['bytes']} bytes, {r['seconds']:.1f} s at {fps} fps, "
+            f"{r['grid'][0]}x{r['grid'][1]} grid)\nchannels: {', '.join(r['channels'])}"
+            + ("" if r["labels"] else "\nno channel labels: Furnace's UI font (res/fonts) is missing"))
 
 
 if __name__ == "__main__":

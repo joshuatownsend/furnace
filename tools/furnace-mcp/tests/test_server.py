@@ -49,7 +49,7 @@ async def test_tools_listed():
         names = {t.name for t in (await c.list_tools()).tools}
     assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
                      "read_instrument", "write_instrument", "render", "preview_instrument",
-                     "export"}
+                     "export", "export_video"}
 
 
 async def test_inspect(demo):
@@ -306,3 +306,62 @@ def test_save_stages_next_to_the_song(demo, monkeypatch):
     monkeypatch.setattr(fsong.os, "replace", lambda a, b: (seen.append(Path(a)), real(a, b)))
     fsong.save(fsong.load(demo), demo)
     assert seen and seen[0].parent == Path(demo).parent and not seen[0].exists()
+
+
+
+async def test_channels_come_from_furnace():
+    chans = fsong.channels(fsong.load(DEMO))
+    assert chans[2] == ("FM 3 OP1", fsong.EXT_OPERATOR) and chans[9] == ("Square 1", 1)
+    assert len(chans) == 13
+
+
+async def test_info_names_channels_from_the_sub_song_asked_for(tmp_path):
+    song = fsong.load(DEMO)
+    second = json.loads(json.dumps(song["subsongs"][0]))
+    second["channelData"][0]["name"] = "Lead"
+    song["subsongs"].append(second)
+    src = tmp_path / "two.json"
+    src.write_text(json.dumps(song), encoding="utf-8")
+    assert "- 0: FM 1 [type 0]" in fsong.run(["-info", src])
+    assert "- 0: Lead [type 0]" in fsong.run(["-info", "-subsong", 1, src])
+
+
+async def test_exportchans_rejects_channels_the_song_lacks(tmp_path):
+    with pytest.raises(fsong.FurnaceError, match="has 13 channels"):
+        fsong.render(fsong.excerpt(fsong.load(DEMO), 0, 0, 0), tmp_path / "x.wav",
+                     per_channel=True, channels=[13])
+
+
+async def test_exportchans_renders_only_those_channels(tmp_path):
+    song = fsong.excerpt(fsong.load(DEMO), 0, 2, 2)
+    files = fsong.render(song, tmp_path / "ch.wav", per_channel=True, channels=[0, 9])
+    assert [c for c, _ in files] == [0, 9]
+    # channels 2-5 are the operators of extended FM channel 3: they export as one file under 2
+    files = fsong.render(song, tmp_path / "op.wav", per_channel=True, channels=[3, 4])
+    assert [c for c, _ in files] == [2]
+    # a narrower render under a name used before returns only its own channels
+    files = fsong.render(song, tmp_path / "ch.wav", per_channel=True, channels=[9])
+    assert [c for c, _ in files] == [9]
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not on PATH")
+async def test_export_video(demo, tmp_path):
+    out = tmp_path / "scopes.mp4"
+    async with Client(mcp) as c:
+        msg = text(await c.call_tool("export_video", {
+            "path": demo, "output": str(out), "order_start": 2, "order_end": 2,
+            "size": "320x180", "fps": 10, "color": "channel"}))
+    # Furnace's own channel names; the extended channel's four operators are one scope
+    assert "Square 1" in msg and "FM 1" in msg and "OP" not in msg, msg
+    probe = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_name,width,height",
+                            "-of", "csv=p=0", str(out)], capture_output=True, text=True, check=True)
+    assert probe.stdout.split() == ["h264,320,180", "aac"]
+
+
+async def test_export_video_rejects_bad_input(demo, tmp_path):
+    async with Client(mcp) as c:
+        bad_ext = await c.call_tool("export_video", {"path": demo, "output": str(tmp_path / "a.gif")})
+        bad_size = await c.call_tool("export_video", {"path": demo, "output": str(tmp_path / "a.mp4"),
+                                                      "size": "321x180"})
+    assert bad_ext.is_error and ".mp4" in bad_ext.content[0].text
+    assert bad_size.is_error and "even" in bad_size.content[0].text

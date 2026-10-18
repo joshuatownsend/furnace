@@ -2755,6 +2755,17 @@ void DivEngine::dumpSongInfo(int subSongIndex) {
       index++;
     }
   }
+
+  // channel names as the pattern view shows them, and their DivChanTypes
+  // (5 = an operator of an extended FM channel; per-channel export writes a run
+  // of them as one file, named after the first)
+  printf("\nCHANNELS\n");
+  for (int i=0; i<song.chans; i++) {
+    // custom names belong to a sub-song: the one asked for, not curSubSong
+    String name=(timedSubSong!=NULL)?timedSubSong->chanName[i]:"";
+    if (name.empty()) name=(song.dispatchChanOfChan[i]<0)?"??":song.chanDef[i].name;
+    printf("- %d: %s [type %d]\n",i,name.c_str(),getChannelType(i));
+  }
 }
 
 int DivEngine::addInstrument(int refChan, DivInstrumentType fallbackType) {

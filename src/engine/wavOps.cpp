@@ -592,6 +592,14 @@ bool DivEngine::saveAudio(const char* path, DivAudioExportOptions options) {
   exportVBRQuality=options.vbrQuality;
   exportFadeOut=options.fadeOut;
   memcpy(exportChannelMask,options.channelMask,DIV_MAX_CHANS*sizeof(bool));
+  // the operator channels of an extended channel (type 5) export as one file,
+  // named after the first of them; asking for any of them asks for that file
+  for (int i=song.chans-1; i>0; i--) {
+    if (exportChannelMask[i] && getChannelType(i)==5 && getChannelType(i-1)==5) {
+      exportChannelMask[i]=false;
+      exportChannelMask[i-1]=true;
+    }
+  }
   if (exportMode!=DIV_EXPORT_MODE_ONE) {
     // remove extension
     String lowerCase=exportPath;

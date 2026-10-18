@@ -42,6 +42,7 @@ VOL, ARP = 0, 1
 INSTRUMENTS = [
     {"name": "Lead", "type": 0, "macros": [
         macro(VOL, [15, 14, 13, 12, 12, 11, 11, 11, 10], loop=8),
+        macro(ARP, [12, 12, 0]),  # an octave blip on each note's attack
     ]},
     {"name": "Arp Major", "type": 0, "macros": [
         macro(VOL, [13, 12, 10, 9, 8, 6, 5, 3, 2, 0]),

@@ -3,7 +3,7 @@
 > Brief for a design spike. Build the first image behind an option, then test whether it helps. Do not make images the default until the test says so.
 > Drift check: `git diff --stat f491976c9..HEAD -- tools/furnace-mcp`.
 
-- **Status**: Brief written
+- **Status**: Built 2026-10-18: items 1-4 in PR #14 (branch idea-022-render-image)
 - **Verdict**: Validate
 - **Score**: 7/10 (my estimate; /ideate has not scored this)
 - **Lenses**: outside-in (a public report from another tool's author) plus inside-out (004's weak timbre result)
@@ -77,6 +77,67 @@ fframes' waveform command works on videos built as fframes projects, and it need
 - **Build it**: images win at least two more tasks than text alone, or win the instrument-edit trials (2 of 3 or better where text got 1 of 3), at a token cost Josh accepts. Then add items 2–4 and consider making images the default for `preview_instrument`.
 - **Reshape it**: images help only on timing questions (where in the song), not on tone. Keep item 1, skip item 2, and look again at the timbre metrics from 004.
 - **Drop it**: no difference, or images make answers worse. Keep the plumbing check's result in this brief and stop.
+
+## Spike results (2026-10-18)
+
+Branch `idea-022-render-image`. Item 1 is built: `render(..., image=True)` returns the text report plus a PNG (`furnace_mcp/picture.py`). The PNG is about 1200×780–840 px and is saved beside the WAV. Tests: 149 pass.
+
+**Step 1, the plumbing: yes.** A Playwright MCP screenshot came through as an image I could read (shapes and text). In-process, the furnace server returns `[TextContent, ImageContent]` once `render` drops its `-> str` annotation. Not yet checked: a live call through the furnace server itself. That needs a `/mcp` reconnect to load the new code.
+
+**Step 2, order lines.** Each order's start is furnace's `-info` duration of the orders before it, run in parallel. A whole song takes under a second. The time axis follows the WAV, because furnace's timing walk can run a couple of ticks longer. One upstream quirk: the walk counts a speed effect two ticks late, so after a speed change the lines trail the audio by 33 ms. That's about one pixel. The test plants a `09xx`/`0Fxx` speed change and checks note onsets against the lines.
+
+**Step 3, the tasks.** Each task was planted on a copy, with its answer written down before any trial. `tools/furnace-mcp/examples/blind_test_022.py` rebuilds all the material and the answer key from the demo songs.
+
+1. Which orders does the mix clip in? (*All Good Times* 00-07 as it is: answer 04 and 07)
+2. One channel drops out for one order. Which channel, and which order? (ch0, order 04)
+3. Which melodic channel was turned down about 15 dB? (ch6)
+4. Which of 004's three Funk Gt edits was made? (three trials: C, A, B)
+5. Which of two held strings notes has a clicking loop? (A)
+6. Which of two single notes has the faster attack? (B)
+
+**Step 4, the blind test.** Each trial used two fresh agents. Both saw the same text; one also saw the picture. For task 4 the image arm got a stand-in for item 2: the whole note plus three close-ups of a few cycles each, drawn by a scratch script.
+
+| Task | Text only | Text + image |
+|---|---|---|
+| 1 clip orders | ✗ guessed 05 | ✓ 04, 07 (round 2) |
+| 2 dropout | ✓ ch0, but "the order is a pure guess" | ✓ ch0 04, high |
+| 3 too quiet | ✓ ch6 | ✓ ch6 |
+| 4.1 edit C (feedback) | ✗ A | ✓ C, citing the attack close-up |
+| 4.2 edit A (multiplier) | ✓ A | ✓ A |
+| 4.3 edit B (decay) | ✓ B | ✓ B, high |
+| 5 loop click | ✗ B, read brightness as clicks | ✓ A, from the spectrogram stripes |
+| 6 faster attack | "can't tell", guessed B | ✓ B, high |
+| **score** | **5 of 8, 2 of them stated guesses (3 of 8 without)** | **8 of 8** |
+
+Agents with the image made 3–5 tool calls, against 2–3 for text only, and used about 1.5–2k more tokens. That's the cost of the image.
+
+**What the test found and fixed along the way.** Round 1 ran on two flawed materials, so those trials were run again:
+
+- **Clipped columns were invisible.** In task 1, round 1, the image arm found only order 07. The two clips in order 04 were red columns one pixel wide inside a dense white waveform. Clipped columns are now 3 px bands the full height of the row. Round 2 found both orders.
+- **My dropout plant was wrong.** On this song, ch2 is FM 3 in extended mode, and its audio is four operator channels, so silencing one left the others playing. The image arm correctly saw ch2 still playing; it then picked a natural gap in ch6. The rerun planted a note-off on ch0 instead.
+- **Idle chips were drawn as channels.** Some sit at a DC offset after the song starts. Silence is now judged per 2048-sample block, so a single step doesn't count as sound.
+
+**Answers to the open questions.**
+
+1. Yes: Claude Code shows MCP images here (see above).
+2. Stacked channels under the mix worked. Agents read rows for where things happen (tasks 2, 6) and row height for loudness (task 3).
+3. The spectrogram is worth it. It was the only evidence that solved task 5 (vertical broadband stripes at each loop). The text's brightness numbers pointed the other way.
+4. In 4.1 the attack close-up at 20 ms decided it; in 4.3 the whole-note panel did. Keep both.
+5. Yes: the PNG sits beside the WAV, and its path is in the report.
+
+**Caveats.** In tasks 5 and 6 the text arm got `render` reports, which hold no envelope or transient numbers. In real use Claude would turn to `preview_instrument` or `detect_sample_pitch` for those questions. The verdict doesn't depend on them: tasks 1 and 4.1 alone clear the bar, and image wins the instrument trials 3 of 3 either way. One agent per arm per trial. I designed the tasks, and tasks 1-2 were rerun after fixes. Text did better on the instrument edits than in 004 (2 of 3, against 1 of 3). The 004 report fixes probably account for that.
+
+**Verdict: build it.** Images win on 3 tasks outright (1, 4.1, 5), and on 5 if stated guesses don't count. That clears the "at least two more" bar. They also won the instrument-edit trials 3 of 3. Next: items 2-4, with the task-4 close-up layout as the starting point for `preview_instrument(image=True)`. One decision for Josh: whether the cost of about 2k tokens per image is acceptable, which decides whether `preview_instrument` shows images by default.
+
+## Build (2026-10-18)
+
+Josh accepted the token cost, so items 2-4 were built after the spike:
+
+- **`preview_instrument(image=True)`:** the task-4 layout. The whole note with note on and off marked, three close-ups of about four cycles (attack +20 ms, held +150 ms, just before release), and harmonic bars for the attack and the held part. Each close-up is scaled to fit and labelled with its peak, because at a shared scale a sustain 25 dB down was a flat line.
+- **`detect_sample_pitch(image=True)`:** the sample with the measured part shaded and the loop points marked, plus the loop seam close up (the end of the loop joined to its start, as it plays).
+- **`export_video(preview=True)`:** 8 real frames from the video renderer, tiled by ffmpeg with grey borders between frames. It skips drawing and encoding the rest.
+
+Images stay opt-in on every tool. The first live call through the reconnected server, `render(image=True)` on *Neon Midway*, came back as text plus a picture I could read.
 
 ## Kickoff prompt
 

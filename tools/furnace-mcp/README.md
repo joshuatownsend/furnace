@@ -37,12 +37,14 @@ The fork's Furnace (from this branch on) writes the path of the song it has open
 | `write_rows` | Overwrite rows of one channel's pattern from tracker text |
 | `set_order` | Point an order row at pattern indices, or append a row |
 | `read_instrument` / `write_instrument` | Instrument JSON; changes merge |
-| `render` | Render an order range to WAV and return a listen report (loudness, clipping, silence, spectral centroid, band energy; optionally per channel) |
-| `preview_instrument` | Play one note of an instrument on its own and report pitch (cents from the note played), envelope, loudness, and attack and held harmonics. Doesn't change the song |
-| `detect_sample_pitch` | Measure a sample's pitch (8- or 16-bit PCM): what a written C-4 plays, as a note and cents, with a confidence. Says "no clear pitch" for noise, drums and chords. Doesn't change the song |
+| `render` | Render an order range to WAV and return a listen report (loudness, clipping, silence, spectral centroid, band energy; optionally per channel). `image=True` adds a picture: the mix, a spectrogram, one waveform per channel, clips in red and order lines |
+| `preview_instrument` | Play one note of an instrument on its own and report pitch (cents from the note played), envelope, loudness, and attack and held harmonics. `image=True` adds the whole note, close-ups of its wave and harmonic bars. Doesn't change the song |
+| `detect_sample_pitch` | Measure a sample's pitch (8- or 16-bit PCM): what a written C-4 plays, as a note and cents, with a confidence. Says "no clear pitch" for noise, drums and chords. `image=True` adds the sample with its loop and the loop seam close up. Doesn't change the song |
 | `tune_sample` | Set a sample's center rate (the sample editor's "Hz") from its measured pitch, so a written C-4 plays the nearest C (or the note given as `c4_plays`). See below |
 | `export` | fur, json, vgm, s98, wav, txt |
-| `export_video` | An oscilloscope video (mp4) of an order range, one scope per channel, for YouTube. See below |
+| `export_video` | An oscilloscope video (mp4) of an order range, one scope per channel, for YouTube. `preview=True` returns 8 frames on one sheet instead. See below |
+
+The pictures (`image`, `preview`) need ffmpeg on PATH. They are saved next to the WAV, and the report gives the path. A blind test found Claude answers questions about where things happen and what a wave looks like much better with them (`ideas/022-show-claude-the-audio.md`); the numbers in the text stay the exact values.
 
 Notes use Furnace numbering: C-4 is middle C, and lowercase `c_1` is octave −1. Edits save the song in place. The first edit in a session copies it to `<name>.bak.fur`, replacing any backup from an earlier session. Renders go to `%TEMP%/furnace-mcp` (or `FURNACE_MCP_RENDERS`).
 

@@ -450,3 +450,51 @@ async def test_tune_sample_refuses_no_pitch_and_other_depths(ibiza):
     assert not Path(ibiza).with_name("ibiza.bak.fur").exists()
     assert brr.is_error and "depth 9 (BRR)" in brr.content[0].text
     assert missing.is_error and "out of range" in missing.content[0].text
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
+async def test_render_image(demo):
+    async with Client(mcp) as c:
+        res = await c.call_tool("render", {"path": demo, "order_start": 1, "order_end": 2, "image": True})
+    assert not res.is_error, res.content
+    kinds = [type(x).__name__ for x in res.content]
+    assert kinds == ["TextContent", "ImageContent"], kinds
+    assert res.content[1].mime_type == "image/png"
+    report = res.content[0].text
+    png = Path(report.split("image: ")[1].splitlines()[0])
+    assert png.is_file() and png.suffix == ".png"
+    # the image needs per-channel renders, but their text reports come only with per_channel
+    assert not any(line.startswith("ch") for line in report.splitlines()), report
+
+
+def _image_result(res):
+    """(report text, PNG path) from a tool call that returned text plus an image."""
+    assert not res.is_error, res.content
+    assert [type(x).__name__ for x in res.content] == ["TextContent", "ImageContent"]
+    assert res.content[1].mime_type == "image/png"
+    report = res.content[0].text
+    png = Path(report.split("image: ")[1].splitlines()[0]) if "image: " in report else None
+    return report, png
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
+async def test_preview_and_sample_images(demo, ibiza):
+    async with Client(mcp) as c:
+        report, png = _image_result(await c.call_tool(
+            "preview_instrument", {"path": demo, "instrument": 13, "image": True}))
+        assert "envelope:" in report and png.is_file()
+        report, png = _image_result(await c.call_tool(
+            "detect_sample_pitch", {"path": ibiza, "sample": 9, "image": True}))
+        assert "a written C-4 plays" in report and png.is_file()
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not on PATH")
+async def test_export_video_preview(demo, tmp_path):
+    out = tmp_path / "v.mp4"
+    async with Client(mcp) as c:
+        res = await c.call_tool("export_video", {"path": demo, "output": str(out), "order_start": 0,
+                                                 "order_end": 0, "size": "640x360", "preview": True})
+    assert not res.is_error, res.content
+    assert [type(x).__name__ for x in res.content] == ["TextContent", "ImageContent"]
+    assert out.with_suffix(".png").is_file() and not out.exists()
+    assert "8 frames" in res.content[0].text

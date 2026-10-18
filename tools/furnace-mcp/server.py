@@ -58,7 +58,7 @@ def _tool(annotations):
 
 _cache = {}
 _backed_up = set()
-_loaded_rev = {}  # path -> file mtime when its song was last read
+_loaded_rev = {}  # path -> file revision when its song was last read
 
 
 def _path(p):
@@ -83,15 +83,26 @@ def _check_not_dirty(path):
             "Furnace (Ctrl+S) first, then retry.")
 
 
+def _revision(path):
+    """The file's contents, hashed. Modification times can't be trusted here:
+    on coarse-timestamp filesystems (FAT/exFAT, some network shares) two saves
+    within one tick keep the same time. Streamed, since sample-heavy songs can
+    be large."""
+    with open(path, "rb") as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
+
+
 def _load(path):
     key = str(path)
-    mtime = path.stat().st_mtime_ns
-    _loaded_rev[key] = mtime
+    # taken before loading: if the file changes in between, the revision is
+    # the older one and the next save is refused rather than overwriting
+    rev = _revision(path)
+    _loaded_rev[key] = rev
     hit = _cache.get(key)
-    if hit and hit[0] == mtime:
+    if hit and hit[0] == rev:
         return json.loads(hit[1])
     song = fsong.load(path)
-    _cache[key] = (mtime, json.dumps(song))
+    _cache[key] = (rev, json.dumps(song))
     return song
 
 
@@ -99,7 +110,7 @@ def _save(path, song):
     _check_not_dirty(path)
     # the song must still be the revision this edit was made on; otherwise
     # (e.g. the user saved in Furnace meanwhile) writing would discard that save
-    if path.stat().st_mtime_ns != _loaded_rev.get(str(path)):
+    if _revision(path) != _loaded_rev.get(str(path)):
         raise ToolError(
             "the song file changed on disk while this edit was being made (probably "
             "saved in Furnace). Nothing was written; read it again and redo the edit.")

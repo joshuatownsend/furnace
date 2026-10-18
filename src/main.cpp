@@ -99,6 +99,8 @@ int subsong=-1;
 DivCSOptions csExportOptions;
 DivAudioExportOptions exportOptions;
 int exportChansLast=0; // highest channel -exportchans asked for (from 1), 0 if not given
+// fork prototype (ideas/019): -livetest key table and timed MIDI events
+std::vector<int> liveTestKeys, liveTestEvents;
 DivConfig romExportConfig;
 
 #ifdef HAVE_GUI
@@ -592,6 +594,40 @@ TAParamResult pCompression(String val) {
   return TA_PARAM_SUCCESS;
 }
 
+// fork prototype (ideas/019). One entry per line, MIDI channels from 1:
+//   key <chan> <note> <furnace note> <E5xx value>
+//   on <tick> <chan> <note> <velocity>
+//   off <tick> <chan> <note>
+TAParamResult pLiveTest(String val) {
+  FILE* f=ps_fopen(val.c_str(),"r");
+  if (f==NULL) {
+    logE("could not open -livetest file %s",val);
+    return TA_PARAM_ERROR;
+  }
+  char line[256];
+  char what[16];
+  int a=0, b=0, c=0, d=0, lineNum=0;
+  while (fgets(line,sizeof(line),f)!=NULL) {
+    lineNum++;
+    if (line[0]=='#' || line[0]=='\n' || line[0]=='\r') continue;
+    int n=sscanf(line,"%15s %d %d %d %d",what,&a,&b,&c,&d);
+    String w=what;
+    if (w=="key" && n==5) {
+      liveTestKeys.insert(liveTestKeys.end(),{a-1,b,c,d});
+    } else if (w=="on" && n==5) {
+      liveTestEvents.insert(liveTestEvents.end(),{a,TA_MIDI_NOTE_ON|((b-1)&15),c,d});
+    } else if (w=="off" && n>=4) {
+      liveTestEvents.insert(liveTestEvents.end(),{a,TA_MIDI_NOTE_OFF|((b-1)&15),c,0});
+    } else {
+      logE("-livetest line %d: can't read %s",lineNum,line);
+      fclose(f);
+      return TA_PARAM_ERROR;
+    }
+  }
+  fclose(f);
+  return TA_PARAM_SUCCESS;
+}
+
 TAParamResult pBenchmark(String val) {
   if (val=="render") {
     benchMode=1;
@@ -775,6 +811,7 @@ void initParams() {
   params.push_back(TAParam("s","subsong",true,pSubSong,"<number>","set sub-song"));
   params.push_back(TAParam("","outmode",true,pOutMode,"one|persys|perchan","set file output mode"));
   params.push_back(TAParam("","exportchans",true,pExportChans,"<list>","with -outmode perchan, export only these channels (from 1, e.g. 1-4,7)"));
+  params.push_back(TAParam("","livetest",true,pLiveTest,"<file>","fork prototype (ideas/019): play MIDI key events through a microtonal key table during -output"));
   params.push_back(TAParam("S","safemode",false,pSafeMode,"","enable safe mode (software rendering and no audio)"));
   params.push_back(TAParam("A","safeaudio",false,pSafeModeAudio,"","enable safe mode (with audio"));
 
@@ -1256,6 +1293,10 @@ int main(int argc, char** argv) {
     }
     if (outName!="") {
       e.setConsoleMode(true);
+      if (!liveTestEvents.empty()) {
+        e.setMicroKeys(liveTestKeys);
+        e.setLiveTest(liveTestEvents);
+      }
       e.saveAudio(outName.c_str(),exportOptions);
       e.waitAudioFile();
     }

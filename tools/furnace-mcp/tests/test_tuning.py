@@ -103,6 +103,14 @@ def test_key_table_for_the_53_preset():
 
 
 def test_in_tune_keys_still_get_e580():
-    table = t.key_table(preset("12ET"), t.edo(12), steps_per_channel=0)
+    table = t.key_table(preset("12ET"), t.edo(12))  # guesses: the channel means nothing
     assert {e5 for _, e5 in table.values()} == {0x80}
     assert table[1, 60] == (parse_note("C-4"), 0x80)
+    assert table[6, 60] == table[1, 60]
+
+
+def test_key_table_wants_a_rule_when_none_fits():
+    keys = [t.Key(0, 0, 1, 60), t.Key(0, 1, 2, 60), t.Key(0, 2, 1, 61)]
+    with pytest.raises(t.TuningError, match="steps_per_channel"):
+        t.key_table(keys, t.edo(31))
+    assert len(t.key_table(keys, t.edo(31), steps_per_channel=31)) == 3

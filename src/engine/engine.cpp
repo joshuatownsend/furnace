@@ -1715,6 +1715,9 @@ void DivEngine::playSub(bool preserveDrift, int goalRow) {
   std::chrono::high_resolution_clock::time_point timeStart=std::chrono::high_resolution_clock::now();
   for (int i=0; i<song.systemLen; i++) disCont[i].dispatch->setSkipRegisterWrites(false);
   reset();
+  // fork prototype (ideas/019): each pass of a per-channel export replays -livetest
+  liveTestPos=0;
+  liveTestTick=0;
   if (preserveDrift && curOrder==0) {
     logV("preserveDrift && curOrder is true");
     return;
@@ -3726,7 +3729,7 @@ int DivEngine::getViableChannel(int chan, int off, int ins) {
   return (chan+off)%song.chans;
 }
 
-bool DivEngine::autoNoteOn(int ch, int ins, int note, int vol, int transpose) {
+bool DivEngine::autoNoteOn(int ch, int ins, int note, int vol, int transpose, int pitch, int key) {
   bool isViable[DIV_MAX_CHANS];
   bool canPlayAnyway=false;
   bool notInViableChannel=false;
@@ -3768,8 +3771,9 @@ bool DivEngine::autoNoteOn(int ch, int ins, int note, int vol, int transpose) {
   do {
     if ((!midiPoly) || (isViable[finalChan] && chan[finalChan].midiNote==-1 && (insInst->type==DIV_INS_OPL || getChannelType(finalChan)==finalChanType || notInViableChannel))) {
       chan[finalChan].midiNote=note;
+      chan[finalChan].midiKey=key;
       chan[finalChan].midiAge=midiAgeCounter++;
-      pendingNotes.push_back(DivNoteEvent(finalChan,ins,note+((note&DIV_NOTE_RAW_FLAG)?0:transpose),vol,true));
+      pendingNotes.push_back(DivNoteEvent(finalChan,ins,note+((note&DIV_NOTE_RAW_FLAG)?0:transpose),vol,true,false,false,pitch));
       return true;
     }
     if (++finalChan>=song.chans) {
@@ -3789,22 +3793,73 @@ bool DivEngine::autoNoteOn(int ch, int ins, int note, int vol, int transpose) {
   } while (finalChan!=midiBaseChan);
 
   chan[candidate].midiNote=note;
+  chan[candidate].midiKey=key;
   chan[candidate].midiAge=midiAgeCounter++;
-  pendingNotes.push_back(DivNoteEvent(candidate,ins,note+((note&DIV_NOTE_RAW_FLAG)?0:transpose),vol,true));
+  pendingNotes.push_back(DivNoteEvent(candidate,ins,note+((note&DIV_NOTE_RAW_FLAG)?0:transpose),vol,true,false,false,pitch));
   return true;
 }
 
-void DivEngine::autoNoteOff(int ch, int note, int vol) {
+void DivEngine::autoNoteOff(int ch, int note, int vol, int key) {
   if (!playing) {
     return;
   }
   //if (ch<0 || ch>=song.chans) return;
   for (int i=0; i<song.chans; i++) {
-    if (chan[i].midiNote==note) {
+    // fork prototype (ideas/019): with a key table, two keys can round to the
+    // same note, so release by the key that played it
+    if (key>=0?(chan[i].midiKey==key):(chan[i].midiNote==note)) {
       pendingNotes.push_back(DivNoteEvent(i,-1,0,-1,false));
       chan[i].midiNote=-1;
+      chan[i].midiKey=-1;
     }
   }
+}
+
+// fork prototype (ideas/019)
+void DivEngine::midiNoteIn(int ch, int note, int vel, int ins, bool on) {
+  if (ch<0 || ch>15 || note<0 || note>127) return;
+  if (microKeys && microNote[ch][note]>=0) {
+    int key=(ch<<7)|note;
+    if (on) {
+      autoNoteOn(ch,ins,microNote[ch][note],vel,0,microPitch[ch][note]-0x80,key);
+    } else {
+      autoNoteOff(ch,microNote[ch][note],vel,key);
+    }
+    return;
+  }
+  if (on) {
+    autoNoteOn(ch,ins,note-12+60,vel);
+  } else {
+    autoNoteOff(ch,note-12+60,vel);
+  }
+}
+
+void DivEngine::setMicroKeys(const std::vector<int>& entries) {
+  for (int i=0; i<16; i++) {
+    for (int j=0; j<128; j++) {
+      microNote[i][j]=-1;
+      microPitch[i][j]=0x80;
+    }
+  }
+  for (size_t i=0; i+3<entries.size(); i+=4) {
+    int ch=entries[i], note=entries[i+1];
+    if (ch<0 || ch>15 || note<0 || note>127) continue;
+    microNote[ch][note]=entries[i+2];
+    microPitch[ch][note]=entries[i+3];
+  }
+  microKeys=!entries.empty();
+}
+
+void DivEngine::setLiveTest(const std::vector<int>& events) {
+  liveTest.clear();
+  for (size_t i=0; i+3<events.size(); i+=4) {
+    liveTest.push_back(LiveTestEvent{events[i],(unsigned char)events[i+1],(unsigned char)events[i+2],(unsigned char)events[i+3]});
+  }
+  std::stable_sort(liveTest.begin(),liveTest.end(),[](const LiveTestEvent& a, const LiveTestEvent& b) {
+    return a.tick<b.tick;
+  });
+  liveTestPos=0;
+  liveTestTick=0;
 }
 
 void DivEngine::autoNoteOffAll() {

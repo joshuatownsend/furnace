@@ -2115,7 +2115,19 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
   }
 
   // don't let user play anything during export
-  if (exporting) pendingNotes.clear();
+  if (exporting && liveTest.empty()) pendingNotes.clear();
+
+  // fork prototype (ideas/019): -livetest MIDI events, by tick
+  if (!liveTest.empty() && !skipping) {
+    while (liveTestPos<liveTest.size() && liveTest[liveTestPos].tick<=liveTestTick) {
+      const LiveTestEvent& ev=liveTest[liveTestPos++];
+      bool on=(ev.type&0xf0)==TA_MIDI_NOTE_ON && ev.data1>0;
+      if ((ev.type&0xf0)==TA_MIDI_NOTE_ON || (ev.type&0xf0)==TA_MIDI_NOTE_OFF) {
+        midiNoteIn(ev.type&15,ev.data0,ev.data1,0,on);
+      }
+    }
+    liveTestTick++;
+  }
 
   // process pending notes (live playback)
   if (!pendingNotes.empty()) {
@@ -2172,6 +2184,12 @@ bool DivEngine::nextTick(bool noAccum, bool inhibitLowLat) {
         }
         // fire command
         dispatchCmd(DivCommand(DIV_CMD_VOLUME,note.channel,mappedVol));
+      }
+      // fork prototype (ideas/019): a microtonal key's detune, as E5xx sets it
+      if (note.pitch!=DIV_NO_PITCH) {
+        chan[note.channel].pitch=note.pitch;
+        dispatchCmd(DivCommand(DIV_CMD_PITCH,note.channel,chan[note.channel].pitch+(((chan[note.channel].vibratoDepth*vibTable[chan[note.channel].vibratoPos]*chan[note.channel].vibratoFine)>>4)/15)));
+        dispatchCmd(DivCommand(DIV_CMD_HINT_PITCH,note.channel,chan[note.channel].pitch));
       }
       // send note on command and set channel state
       dispatchCmd(DivCommand(DIV_CMD_NOTE_ON,note.channel,note.note));
@@ -2987,7 +3005,7 @@ void DivEngine::nextBuf(float** in, float** out, int inChans, int outChans, unsi
             pendingNotes.push_back(DivNoteEvent(chan,-1,0,-1,false,false,true));
           } else {
             // find a suitable channel and add this event to the queue
-            autoNoteOff(msg.type&15,msg.data[0]-12+60,msg.data[1]);
+            midiNoteIn(msg.type&15,msg.data[0],msg.data[1],ins,false);
           }
           // start the engine if necessary
           if (!playing) {
@@ -3006,7 +3024,7 @@ void DivEngine::nextBuf(float** in, float** out, int inChans, int outChans, unsi
               pendingNotes.push_back(DivNoteEvent(chan,-1,0,-1,false,false,true));
             } else {
               // find a suitable channel and add this event to the queue
-              autoNoteOff(msg.type&15,msg.data[0]-12+60,msg.data[1]);
+              midiNoteIn(msg.type&15,msg.data[0],msg.data[1],ins,false);
             }
           } else {
             if (midiIsDirect) {
@@ -3015,7 +3033,7 @@ void DivEngine::nextBuf(float** in, float** out, int inChans, int outChans, unsi
               pendingNotes.push_back(DivNoteEvent(chan,ins,msg.data[0]-12+60,msg.data[1],true,false,true));
             } else {
               // find a suitable channel and add this event to the queue
-              autoNoteOn(msg.type&15,ins,msg.data[0]-12+60,msg.data[1]);
+              midiNoteIn(msg.type&15,msg.data[0],msg.data[1],ins,true);
             }
           }
           break;

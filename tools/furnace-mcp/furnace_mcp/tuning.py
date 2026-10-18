@@ -131,9 +131,18 @@ def nearest(c, ref=MIDDLE_C):
 
 def key_table(keys, scale, steps_per_channel=None, ref_chan=1, ref_note=60, ref=MIDDLE_C):
     """{(chan, note): (furnace note, E5xx value)} for every key. ref_chan and
-    ref_note name the key that plays degree 0, at Furnace note ref."""
+    ref_note name the key that plays degree 0, at Furnace note ref. Without
+    steps_per_channel, it's the one rule that keeps the map isomorphic."""
     if steps_per_channel is None:
-        steps_per_channel = scale.size
+        rules = guess_steps_per_channel(keys)
+        if rules is None:
+            steps_per_channel = 0  # one channel: the rule doesn't matter
+        elif len(rules) == 1:
+            steps_per_channel = rules[0]
+        else:
+            raise TuningError("can't tell what a MIDI channel means in this map "
+                              f"({'no rule fits' if not rules else f'rules {rules} all fit'}): "
+                              "give steps_per_channel")
     out = {}
     for k in keys:
         d = degree(k.chan, k.note, steps_per_channel, ref_chan, ref_note)

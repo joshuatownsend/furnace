@@ -49,7 +49,17 @@ async def test_tools_listed():
         names = {t.name for t in (await c.list_tools()).tools}
     assert names == {"current_song", "inspect_song", "read_patterns", "write_rows", "set_order",
                      "read_instrument", "write_instrument", "render", "preview_instrument",
-                     "export", "export_video", "detect_sample_pitch", "tune_sample"}
+                     "export", "export_video", "detect_sample_pitch", "tune_sample", "piano_roll"}
+
+
+async def test_piano_roll_writes_a_page(demo, tmp_path):
+    out = tmp_path / "roll.html"
+    async with Client(mcp) as c:
+        r = text(await c.call_tool("piano_roll", {"output": str(out), "order_end": 0, "path": demo}))
+        bad = await c.call_tool("piano_roll", {"output": str(tmp_path / "roll.png"), "path": demo})
+    assert r.startswith(f"wrote {out}: ") and "1 orders" in r
+    assert out.read_text(encoding="utf-8").startswith("<!doctype html>")
+    assert bad.is_error and "html" in bad.content[0].text
 
 
 async def test_inspect(demo):

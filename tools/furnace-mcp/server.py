@@ -23,7 +23,7 @@ from mcp.server.mcpserver import Image
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from furnace_mcp import analysis, notation, picture, scheme as fscheme, song as fsong, video
+from furnace_mcp import analysis, notation, picture, roll, scheme as fscheme, song as fsong, video
 
 mcp = MCPServer(
     "furnace",
@@ -631,6 +631,23 @@ def export_video(output: str, order_start: int = 0, order_end: int | None = None
     return (f"wrote {r['path']} ({r['bytes']} bytes, {r['seconds']:.1f} s at {fps} fps, "
             f"{r['grid'][0]}x{r['grid'][1]} grid)\nchannels: {', '.join(r['channels'])}"
             + ("" if r["labels"] else "\nno channel labels: Furnace's UI font (res/fonts) is missing"))
+
+
+@_tool(_EDIT)
+def piano_roll(output: str, order_start: int = 0, order_end: int | None = None,
+               channels: str = "", subsong: int = 0, path: str = "") -> str:
+    """Draw the song as a read-only piano roll: an HTML page for the user to open
+    in a browser (rows across, written pitch up, a color per channel, the tracker
+    cell on hover). Orders order_start..order_end (inclusive; default the whole
+    song). channels: e.g. "0,2,5-7" (default all). Pitch effects show as markers,
+    not as drawn pitch. Writes output; does not change the song."""
+    out = _output(output)
+    if out.suffix.lower() not in (".html", ".htm"):
+        raise ValueError("output must be an .html file")
+    d = roll.write(_load(_path(path)), out, sub_index=subsong, order_start=order_start,
+                   order_end=order_end, channels=channels or None)
+    return (f"wrote {out}: {len(d['notes'])} notes over {d['rows']} rows "
+            f"({len(d['orders'])} orders), {len(d['channels'])} channels")
 
 
 if __name__ == "__main__":

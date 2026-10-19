@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat f491976c9..HEAD -- src/gui/pattern.cpp src/gui/piano.cpp src/gui/gui.h src/gui/gui.cpp src/gui/doAction.cpp src/gui/guiConst.cpp src/engine/pattern.h src/engine/defines.h tools/furnace-mcp/furnace_mcp/song.py`.
 
-- **Status**: BRIEF WRITTEN
+- **Status**: SPIKE IN PROGRESS (steps 1 and 3 done, step 2 waiting on Josh and Michael)
 - **Verdict**: Validate
 - **Score**: 4/10 (my estimate; /ideate has not scored this)
 - **Lenses**: outside-in (people who arrive from DAWs)
@@ -91,6 +91,15 @@ Recommended order: A, then B to test the look cheaply, then C if people want it 
 - **Go**: someone uses A or B and asks for it inside Furnace. Build C (S–M) as a new window file. Consider D later, borrowing from the fork.
 - **Reshape**: B is enough. Ship it as a furnace-mcp tool or script, with no GUI change and no merge cost.
 - **Drop**: nobody in the family wants it, or the existing fork already serves the people who do. Point them to that fork.
+
+## Spike results so far (2026-10-19)
+
+- **Step 1 (question 1)**: Josh says yes, for both. Wrong notes and a melody's shape are each hard to see in a column of letters. He wants all channels in colors (question 4).
+- **Step 2 (try the fork)**: `rednoobmusic/furnace-piano-roll` is cloned to `C:\devurnaceurnace-piano-roll` and built there (see the build note below). Waiting for Josh and Michael's 15 minutes.
+- **Step 3 (view outside the app)**: done as `furnace_mcp/roll.py`, the `piano_roll` MCP tool and `python -m furnace_mcp.roll`. One self-contained HTML page: rows across, written pitch up, a color per channel, order, bar and beat lines, effect markers, and the tracker cell on hover, with every note of the same pitch lit up. Click a channel to hide it, double-click to solo it. Checked on Evergreen (8 channels, 1739 notes) and NES Byte-Sized Bop (11 channels).
+- **Seen so far**: drum channels land among the pitched parts (they have notes too), and a noise channel plots its noise setting as a pitch. Hiding them fixes both. Rows-not-time is fine for these songs.
+- **Question 5 (real time)** has a cheap answer if wanted: `picture.order_starts()` already gives each order's start in seconds from the engine's own timing walk.
+- **Not built, on purpose**: key detection or out-of-key highlighting for wrong notes. Ask after Josh and Michael try the page.
 
 ## Kickoff prompt
 

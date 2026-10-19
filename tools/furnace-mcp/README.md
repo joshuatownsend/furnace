@@ -43,6 +43,7 @@ The fork's Furnace (from this branch on) writes the path of the song it has open
 | `tune_sample` | Set a sample's center rate (the sample editor's "Hz") from its measured pitch, so a written C-4 plays the nearest C (or the note given as `c4_plays`). See below |
 | `export` | fur, json, vgm, s98, wav, txt |
 | `export_video` | An oscilloscope video (mp4) of an order range, one scope per channel, for YouTube. `preview=True` returns 8 frames on one sheet instead. See below |
+| `piano_roll` | A read-only piano roll of an order range as an HTML page to open in a browser. See below |
 
 The pictures (`image`, `preview`) need ffmpeg on PATH. They are saved next to the WAV, and the report gives the path. A blind test found Claude answers questions about where things happen and what a wave looks like much better with them (`ideas/022-show-claude-the-audio.md`); the numbers in the text stay the exact values.
 
@@ -79,6 +80,23 @@ It renders the mix and each channel separately with the Furnace CLI, draws one s
 - Channels that make no sound in the range are left out, and so are channels you hid from the Channel Oscilloscope in Furnace. Labels are the channel names Furnace shows ("FM 1", "Square 2", or your custom name); an extended FM channel's four operators make one scope.
 - Colors come from your Furnace color scheme (`furnace.cfg`), or from a scheme file exported in Settings > Color (`--scheme`). `--color channel` uses each channel's custom color, else one color per chip.
 - `--orders` takes hex order numbers, as in the order list. Rendering every channel takes time (about 4 minutes for a 2.5-minute Genesis song), so try a few orders first. Channels render in parallel through the CLI's `-exportchans` flag, so rebuild Furnace if it says that flag is unknown.
+
+## Piano roll
+
+`piano_roll`, or from the command line (ideas/013):
+
+```
+cd tools/furnace-mcp
+uv run python -m furnace_mcp.roll examples/evergreen.fur -o evergreen.html
+uv run python -m furnace_mcp.roll song.fur --orders 2-5 --channels 0-3
+```
+
+One self-contained page: rows across, written pitch up, a color per channel (a channel's custom color wins). Order lines are labelled in hex like the order list, with beat and bar lines from the song's highlights. Hover a note for its channel, `order:row`, length, instrument and the tracker cell; every note of the same pitch lights up with it. Click a channel to hide it, double-click to show it alone.
+
+- A note lasts until the next note, `OFF` or `===` in its channel. `REL` doesn't end it.
+- A jump or break (`0Bxx`, `0Dxx`, `FFxx`) in any channel ends the order on that row. The row `0Dxx` jumps to is ignored.
+- Pitch effects (arpeggio, slides, portamento, vibrato, detune) and `REL` are white diamonds on the note. The bar shows the written pitch, not what you hear, like the pattern view.
+- Time is in rows, so speed and tempo changes don't stretch anything.
 
 ## Tests
 

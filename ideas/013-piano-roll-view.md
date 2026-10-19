@@ -95,7 +95,7 @@ Recommended order: A, then B to test the look cheaply, then C if people want it 
 ## Spike results so far (2026-10-19)
 
 - **Step 1 (question 1)**: Josh says yes, for both. Wrong notes and a melody's shape are each hard to see in a column of letters. He wants all channels in colors (question 4).
-- **Step 2 (try the fork)**: `rednoobmusic/furnace-piano-roll` is cloned to `C:\devurnaceurnace-piano-roll` and built there (see the build note below). Waiting for Josh and Michael's 15 minutes.
+- **Step 2 (try the fork)**: `rednoobmusic/furnace-piano-roll` is cloned to `C:/dev/furnace/furnace-piano-roll` and built there. Waiting for Josh and Michael's 15 minutes.
 - **Step 3 (view outside the app)**: done as `furnace_mcp/roll.py`, the `piano_roll` MCP tool and `python -m furnace_mcp.roll`. One self-contained HTML page: rows across, written pitch up, a color per channel, order, bar and beat lines, effect markers, and the tracker cell on hover, with every note of the same pitch lit up. Click a channel to hide it, double-click to solo it. Checked on Evergreen (8 channels, 1739 notes) and NES Byte-Sized Bop (11 channels).
 - **Seen so far**: drum channels land among the pitched parts (they have notes too), and a noise channel plots its noise setting as a pitch. Hiding them fixes both. Rows-not-time is fine for these songs.
 - **Question 5 (real time)** has a cheap answer if wanted: `picture.order_starts()` already gives each order's start in seconds from the engine's own timing walk.

@@ -3,7 +3,7 @@
 > Brief for a design spike. Investigate and prototype; do not ship.
 > Drift check: `git diff --stat f491976c9..HEAD -- src/gui/pattern.cpp src/gui/piano.cpp src/gui/gui.h src/gui/gui.cpp src/gui/doAction.cpp src/gui/guiConst.cpp src/engine/pattern.h src/engine/defines.h tools/furnace-mcp/furnace_mcp/song.py`.
 
-- **Status**: SPIKE IN PROGRESS (steps 1 and 3 done, step 2 waiting on Josh and Michael)
+- **Status**: PARKED (2026-10-19). Steps 1 and 3 done; the fork (step 2) builds and opens our songs. To resume: Josh and Michael try the fork and the HTML page, then answer questions 2, 3 and 6. Work is on branch `idea-013-piano-roll`, not merged
 - **Verdict**: Validate
 - **Score**: 4/10 (my estimate; /ideate has not scored this)
 - **Lenses**: outside-in (people who arrive from DAWs)
